@@ -5,42 +5,57 @@ struct Folder {
     subfolders: Vec<Folder>,
     files: Vec<usize>,
     size: usize,
+    name: String,
 }
 
 impl Folder {
-    fn new() -> Self {
+    fn new(name: &str) -> Self {
         Self {
             subfolders: Vec::new(),
             files: Vec::new(),
             size: 0,
+            name: String::from(name),
         }
     }
 
+    fn add_file(&mut self, file: usize) {
+        self.files.push(file);
+        self.size += file;
+    }
+
+    fn add_folder(&mut self, folder: Folder) {
+        self.size += folder.size;
+        self.subfolders.push(folder);
+    }
+
     fn from_commands(lines: &Vec<&str>, mut index: usize) -> (Self, usize) {
-        let mut folder = Folder::new();
+        let x: Vec<&str> = lines[index].split_whitespace().collect();
+        let mut folder = Folder::new(x[2]);
+        index += 1;
         while index < lines.len() {
             let line = lines[index];
-            index += 1;
             if line == "$ cd /" || line == "$ ls" {
+                index += 1;
                 continue;
             }
             if line.starts_with("dir") {
+                index += 1;
                 continue;
             }
             if line == "$ cd .." {
+                index += 1;
                 return (folder, index);
             }
             if line.starts_with("$ cd") {
                 let (subfolder, new_index) = Folder::from_commands(lines, index);
-                folder.size += subfolder.size;
-                folder.subfolders.push(subfolder);
+                folder.add_folder(subfolder);
                 index = new_index;
                 continue;
             }
             let x: Vec<&str> = line.split_whitespace().collect();
             let size = x[0].parse::<usize>().unwrap();
-            folder.files.push(size);
-            folder.size += size;
+            folder.add_file(size);
+            index += 1;
         }
         (folder, index)
     }
