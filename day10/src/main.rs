@@ -19,9 +19,17 @@ impl Cpu {
     }
 
     fn run_cycle(&mut self) {
+        if (self.cycle % 40 - self.regx).abs() <= 1 {
+            print!("#");
+        } else {
+            print!(".");
+        }
         self.cycle += 1;
+        if self.cycle % 40 == 0 {
+            print!("\n");
+        }
         if (self.cycle - 20) % 40 == 0 {
-            self.strengths.push(self.cycle * self.regx)
+            self.strengths.push(self.cycle * self.regx);
         }
         let key = self.cycle - 2;
         if !self.commands.contains_key(&key) {
