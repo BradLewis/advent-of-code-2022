@@ -21,16 +21,14 @@ impl Position {
 
 #[derive(Debug)]
 struct Rope {
-    head: Position,
-    tail: Position,
+    tail: Vec<Position>,
     tail_visited: Vec<Position>,
 }
 
 impl Rope {
-    fn new() -> Self {
+    fn new(tail_length: usize) -> Self {
         Rope {
-            head: Position::new(),
-            tail: Position::new(),
+            tail: vec![Position::new(); tail_length + 1],
             tail_visited: vec![Position::new()],
         }
     }
@@ -49,45 +47,45 @@ impl Rope {
             "R" => self.move_head_right(),
             _ => (),
         }
-        self.move_tail();
+        self.move_tail(1);
         self.update_tail_visited();
     }
 
     fn move_head_up(&mut self) {
-        self.head.y -= 1;
+        self.tail[0].y -= 1;
     }
 
     fn move_head_down(&mut self) {
-        self.head.y += 1;
+        self.tail[0].y += 1;
     }
 
     fn move_head_left(&mut self) {
-        self.head.x -= 1;
+        self.tail[0].x -= 1;
     }
 
     fn move_head_right(&mut self) {
-        self.head.x += 1;
+        self.tail[0].x += 1;
     }
 
-    fn move_tail(&mut self) {
-        if self.head.touching(&self.tail) {
+    fn move_tail(&mut self, piece_to_move: usize) {
+        if self.tail[piece_to_move - 1].touching(&self.tail[piece_to_move]) {
             return;
         }
-        if self.head.x - self.tail.x >= 1 {
-            self.tail.x += 1
-        } else if self.head.x - self.tail.x <= -1 {
-            self.tail.x -= 1
+        if self.tail[piece_to_move - 1].x - self.tail[piece_to_move].x >= 1 {
+            self.tail[piece_to_move].x += 1
+        } else if self.tail[piece_to_move - 1].x - self.tail[piece_to_move].x <= -1 {
+            self.tail[piece_to_move].x -= 1
         }
-        if self.head.y - self.tail.y >= 1 {
-            self.tail.y += 1
-        } else if self.head.y - self.tail.y <= -1 {
-            self.tail.y -= 1
+        if self.tail[piece_to_move - 1].y - self.tail[piece_to_move].y >= 1 {
+            self.tail[piece_to_move].y += 1
+        } else if self.tail[piece_to_move - 1].y - self.tail[piece_to_move].y <= -1 {
+            self.tail[piece_to_move].y -= 1
         }
     }
 
     fn update_tail_visited(&mut self) {
-        if !self.tail_visited.contains(&self.tail) {
-            self.tail_visited.push(self.tail);
+        if !self.tail_visited.contains(&self.tail.last().unwrap()) {
+            self.tail_visited.push(*self.tail.last().unwrap());
         }
     }
 }
@@ -100,7 +98,7 @@ fn main() {
 }
 
 fn part1(s: &str) -> Rope {
-    let mut rope = Rope::new();
+    let mut rope = Rope::new(1);
     s.lines().for_each(|l| {
         let mut parts = l.split_whitespace();
         rope.move_direction_distance(
@@ -131,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_moving() -> Result<(), String> {
-        let mut r = Rope::new();
+        let mut r = Rope::new(1);
         r.move_direction("U");
         r.move_direction("U");
         r.move_direction("L");
@@ -139,41 +137,37 @@ mod tests {
         r.move_direction("R");
         r.move_direction("D");
 
-        assert_eq!(r.head.x, 1);
-        assert_eq!(r.head.y, -1);
+        assert_eq!(r.tail[0].x, 1);
+        assert_eq!(r.tail[0].y, -1);
 
         Ok(())
     }
 
     #[test]
     fn test_moving_tail() -> Result<(), String> {
-        let mut r = Rope::new();
+        let mut r = Rope::new(1);
         r.move_direction("U");
-        r.move_tail();
-        assert_eq!(r.tail.x, 0);
-        assert_eq!(r.tail.y, 0);
+        assert_eq!(r.tail[1].x, 0);
+        assert_eq!(r.tail[1].y, 0);
 
         r.move_direction("L");
-        r.move_tail();
-        assert_eq!(r.tail.x, 0);
-        assert_eq!(r.tail.y, 0);
+        assert_eq!(r.tail[1].x, 0);
+        assert_eq!(r.tail[1].y, 0);
 
         r.move_direction("U");
-        r.move_tail();
-        assert_eq!(r.tail.x, -1);
-        assert_eq!(r.tail.y, -1);
+        assert_eq!(r.tail[1].x, -1);
+        assert_eq!(r.tail[1].y, -1);
 
         r.move_direction("U");
-        r.move_tail();
-        assert_eq!(r.tail.x, -1);
-        assert_eq!(r.tail.y, -2);
+        assert_eq!(r.tail[1].x, -1);
+        assert_eq!(r.tail[1].y, -2);
 
         Ok(())
     }
 
     #[test]
     fn test_tail_visited() -> Result<(), String> {
-        let mut r = Rope::new();
+        let mut r = Rope::new(1);
         r.move_direction_distance("U", 2);
         assert_eq!(r.tail_visited.len(), 2);
 
