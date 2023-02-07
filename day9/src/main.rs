@@ -47,7 +47,9 @@ impl Rope {
             "R" => self.move_head_right(),
             _ => (),
         }
-        self.move_tail(1);
+        for i in 1..self.tail.len() {
+            self.move_tail(i);
+        }
         self.update_tail_visited();
     }
 
@@ -88,25 +90,28 @@ impl Rope {
             self.tail_visited.push(*self.tail.last().unwrap());
         }
     }
+
+    fn parse_instructions(&mut self, instructions: &str) {
+        instructions.lines().for_each(|l| {
+            let mut parts = l.split_whitespace();
+            self.move_direction_distance(
+                parts.next().unwrap(),
+                parts.next().unwrap().parse::<u32>().unwrap(),
+            );
+        });
+    }
 }
 
 fn main() {
     let s = fs::read_to_string("input.txt").expect("File not found");
-    let r = part1(&s);
+    let mut r1 = Rope::new(1);
+    r1.parse_instructions(&s);
 
-    println!("{}", r.tail_visited.len())
-}
+    let mut r2 = Rope::new(9);
+    r2.parse_instructions(&s);
 
-fn part1(s: &str) -> Rope {
-    let mut rope = Rope::new(1);
-    s.lines().for_each(|l| {
-        let mut parts = l.split_whitespace();
-        rope.move_direction_distance(
-            parts.next().unwrap(),
-            parts.next().unwrap().parse::<u32>().unwrap(),
-        );
-    });
-    rope
+    println!("{}", r1.tail_visited.len());
+    println!("{}", r2.tail_visited.len());
 }
 
 #[cfg(test)]
@@ -177,8 +182,19 @@ mod tests {
     #[test]
     fn test_part1() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let r = part1(&s);
+        let mut r = Rope::new(1);
+        r.parse_instructions(&s);
         assert_eq!(r.tail_visited.len(), 13);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_part2() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let mut r = Rope::new(9);
+        r.parse_instructions(&s);
+        assert_eq!(r.tail_visited.len(), 1);
 
         Ok(())
     }
