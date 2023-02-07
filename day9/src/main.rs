@@ -8,7 +8,7 @@ struct Position {
 
 impl Position {
     fn new() -> Self {
-        Position { x: 0, y: 0 }
+        Self { x: 0, y: 0 }
     }
 
     fn touching(&self, p: &Position) -> bool {
@@ -27,7 +27,7 @@ struct Rope {
 
 impl Rope {
     fn new(tail_length: usize) -> Self {
-        Rope {
+        Self {
             tail: vec![Position::new(); tail_length + 1],
             tail_visited: vec![Position::new()],
         }
