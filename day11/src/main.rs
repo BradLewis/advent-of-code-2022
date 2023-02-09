@@ -1,23 +1,24 @@
 use std::{fs, str::FromStr};
 
-type Operation = Box<dyn Fn(i32) -> i32>;
+type Operation = Box<dyn Fn(i64) -> i64>;
 
 #[derive(Debug, PartialEq, Eq)]
 struct Throw {
     target: usize,
-    item: i32,
+    item: i64,
 }
 
 struct Monkey {
-    items: Vec<i32>,
+    items: Vec<i64>,
     operation: Operation,
-    test: i32,
+    test: i64,
     true_target: usize,
     false_target: usize,
+    worry: i64,
 }
 
 impl Monkey {
-    fn new(s: &str) -> Self {
+    fn new(s: &str, worry: i64) -> Self {
         let mut lines = s.lines();
         lines.next();
         Self {
@@ -26,13 +27,14 @@ impl Monkey {
             test: parse_to_int(lines.next().unwrap(), "Test: divisible by "),
             true_target: parse_to_int(lines.next().unwrap(), "If true: throw to monkey "),
             false_target: parse_to_int(lines.next().unwrap(), "If false: throw to monkey "),
+            worry,
         }
     }
 
     fn throw(&mut self) -> Vec<Throw> {
         let mut throws: Vec<Throw> = Vec::new();
         for item in self.items.iter() {
-            let new_item = (self.operation)(*item) / 3;
+            let new_item = (self.operation)(*item) / self.worry;
             let target = match new_item % self.test {
                 0 => self.true_target,
                 _ => self.false_target,
@@ -47,7 +49,7 @@ impl Monkey {
     }
 }
 
-fn parse_items(s: &str) -> Vec<i32> {
+fn parse_items(s: &str) -> Vec<i64> {
     let prefix = "Starting items: ";
 
     s.trim()
@@ -64,11 +66,11 @@ fn parse_operation(s: &str) -> Operation {
     match operands[..] {
         ["old", "*", "old"] => Box::new(|x| x * x),
         ["old", "*", y] => {
-            let y = y.parse::<i32>().unwrap();
+            let y = y.parse::<i64>().unwrap();
             Box::new(move |x| x * y)
         }
         ["old", "+", y] => {
-            let y = y.parse::<i32>().unwrap();
+            let y = y.parse::<i64>().unwrap();
             Box::new(move |x| x + y)
         }
         _ => unreachable!(),
@@ -87,33 +89,43 @@ where
         .unwrap()
 }
 
-fn create_monkies(s: &str) -> Vec<Monkey> {
-    s.split("\n\n").map(|m| Monkey::new(m)).collect()
+fn create_monkies(s: &str, worry: i64) -> Vec<Monkey> {
+    s.split("\n\n").map(|m| Monkey::new(m, worry)).collect()
 }
 
 fn main() {
     let s = fs::read_to_string("input.txt").expect("File not found");
-    let mut p1 = Part1::new(&s);
+    let mut p1 = MonkeyBusiness::new(&s, 3);
     let result = p1.run(20);
+    println!("{}", result);
+
+    let mut p2 = MonkeyBusiness::new(&s, 1);
+    let result = p2.run(10000);
     println!("{}", result);
 }
 
-struct Part1 {
+struct MonkeyBusiness {
     monkies: Vec<Monkey>,
     counts: Vec<usize>,
+    common_divider: i64,
 }
 
-impl Part1 {
-    fn new(s: &str) -> Self {
-        let monkies = create_monkies(s);
+impl MonkeyBusiness {
+    fn new(s: &str, worry: i64) -> Self {
+        let monkies = create_monkies(s, worry);
         let len = monkies.len();
+        let mut divider = 1;
+        for i in 0..len {
+            divider *= monkies[i].test;
+        }
         Self {
             monkies,
             counts: vec![0; len],
+            common_divider: divider,
         }
     }
 
-    fn run(&mut self, iterations: i32) -> usize {
+    fn run(&mut self, iterations: i64) -> usize {
         for _ in 0..iterations {
             self.run_cycle();
         }
@@ -137,7 +149,9 @@ impl Part1 {
     }
 
     fn process_throw(&mut self, throw: &Throw) {
-        self.monkies[throw.target].items.push(throw.item);
+        self.monkies[throw.target]
+            .items
+            .push(throw.item % self.common_divider);
     }
 }
 
@@ -175,7 +189,7 @@ mod tests {
     #[test]
     fn test_parse_to_int() -> Result<(), String> {
         assert_eq!(
-            parse_to_int::<i32>("Test: divisible by 19", "Test: divisible by "),
+            parse_to_int::<i64>("Test: divisible by 19", "Test: divisible by "),
             19
         );
         assert_eq!(
@@ -198,7 +212,7 @@ mod tests {
             If true: throw to monkey 4
             If false: throw to monkey 5";
 
-        let monkey = Monkey::new(s);
+        let monkey = Monkey::new(s, 3);
 
         assert_eq!(monkey.items.len(), 6);
         assert_eq!((monkey.operation)(3), 5);
@@ -211,7 +225,7 @@ mod tests {
     #[test]
     fn test_create_monkies() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let monkies = create_monkies(&s);
+        let monkies = create_monkies(&s, 3);
         assert_eq!(monkies.len(), 4);
         Ok(())
     }
@@ -219,7 +233,7 @@ mod tests {
     #[test]
     fn test_monkey_throw() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let mut monkies = create_monkies(&s);
+        let mut monkies = create_monkies(&s, 3);
 
         let throws = monkies[0].throw();
 
@@ -247,7 +261,7 @@ mod tests {
     #[test]
     fn test_part1_process_throw() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let mut part1 = Part1::new(&s);
+        let mut part1 = MonkeyBusiness::new(&s, 3);
         let throws = part1.monkies[0].throw();
         part1.process_throw(&throws[0]);
 
@@ -259,11 +273,22 @@ mod tests {
     #[test]
     fn test_part1() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let mut part1 = Part1::new(&s);
+        let mut part1 = MonkeyBusiness::new(&s, 3);
         let result = part1.run(20);
 
         assert_eq!(part1.counts, vec![101, 95, 7, 105]);
         assert_eq!(result, 10605);
+        Ok(())
+    }
+
+    #[test]
+    fn test_part2() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let mut part1 = MonkeyBusiness::new(&s, 1);
+        let result = part1.run(10000);
+
+        assert_eq!(part1.counts, vec![52166, 47830, 1938, 52013]);
+        assert_eq!(result, 2713310158);
         Ok(())
     }
 }
