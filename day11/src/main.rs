@@ -1,12 +1,19 @@
-use std::fs;
+use std::{fs, str::FromStr};
+
 type Operation = Box<dyn Fn(i32) -> i32>;
+
+#[derive(Debug, PartialEq, Eq)]
+struct Throw {
+    target: usize,
+    item: i32,
+}
 
 struct Monkey {
     items: Vec<i32>,
     operation: Operation,
     test: i32,
-    true_target: i32,
-    false_target: i32,
+    true_target: usize,
+    false_target: usize,
 }
 
 impl Monkey {
@@ -20,6 +27,23 @@ impl Monkey {
             true_target: parse_to_int(lines.next().unwrap(), "If true: throw to monkey "),
             false_target: parse_to_int(lines.next().unwrap(), "If false: throw to monkey "),
         }
+    }
+
+    fn throw(&mut self) -> Vec<Throw> {
+        let mut throws: Vec<Throw> = Vec::new();
+        for item in self.items.iter() {
+            let new_item = (self.operation)(*item) / 3;
+            let target = match new_item % self.test {
+                0 => self.true_target,
+                _ => self.false_target,
+            };
+            throws.push(Throw {
+                item: new_item,
+                target,
+            })
+        }
+        self.items = Vec::new();
+        throws
     }
 }
 
@@ -51,8 +75,16 @@ fn parse_operation(s: &str) -> Operation {
     }
 }
 
-fn parse_to_int(s: &str, prefix: &str) -> i32 {
-    s.trim().strip_prefix(prefix).unwrap().parse().unwrap()
+fn parse_to_int<T>(s: &str, prefix: &str) -> T
+where
+    T: FromStr,
+{
+    s.trim()
+        .strip_prefix(prefix)
+        .unwrap()
+        .parse::<T>()
+        .ok()
+        .unwrap()
 }
 
 fn create_monkies(s: &str) -> Vec<Monkey> {
@@ -61,11 +93,52 @@ fn create_monkies(s: &str) -> Vec<Monkey> {
 
 fn main() {
     let s = fs::read_to_string("input.txt").expect("File not found");
-    part1(&s);
+    let mut p1 = Part1::new(&s);
+    let result = p1.run(20);
+    println!("{}", result);
 }
 
-fn part1(s: &str) {
-    // let monkies = s.split("\n\n").map(|m|)
+struct Part1 {
+    monkies: Vec<Monkey>,
+    counts: Vec<usize>,
+}
+
+impl Part1 {
+    fn new(s: &str) -> Self {
+        let monkies = create_monkies(s);
+        let len = monkies.len();
+        Self {
+            monkies,
+            counts: vec![0; len],
+        }
+    }
+
+    fn run(&mut self, iterations: i32) -> usize {
+        for _ in 0..iterations {
+            self.run_cycle();
+        }
+
+        let mut final_counts = self.counts.clone();
+        final_counts.sort_by(|a, b| b.cmp(a));
+        final_counts[0] * final_counts[1]
+    }
+
+    fn run_cycle(&mut self) {
+        for i in 0..self.monkies.len() {
+            let throws = self.monkies[i].throw();
+            self.counts[i] += throws.len();
+            self.process_throws(throws);
+        }
+    }
+    fn process_throws(&mut self, throws: Vec<Throw>) {
+        for throw in throws.iter() {
+            self.process_throw(throw);
+        }
+    }
+
+    fn process_throw(&mut self, throw: &Throw) {
+        self.monkies[throw.target].items.push(throw.item);
+    }
 }
 
 #[cfg(test)]
@@ -102,15 +175,15 @@ mod tests {
     #[test]
     fn test_parse_to_int() -> Result<(), String> {
         assert_eq!(
-            parse_to_int("Test: divisible by 19", "Test: divisible by "),
+            parse_to_int::<i32>("Test: divisible by 19", "Test: divisible by "),
             19
         );
         assert_eq!(
-            parse_to_int("If true: throw to monkey 2", "If true: throw to monkey "),
+            parse_to_int::<usize>("If true: throw to monkey 2", "If true: throw to monkey "),
             2
         );
         assert_eq!(
-            parse_to_int("If false: throw to monkey 7", "If false: throw to monkey "),
+            parse_to_int::<usize>("If false: throw to monkey 7", "If false: throw to monkey "),
             7
         );
         Ok(())
@@ -140,6 +213,57 @@ mod tests {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
         let monkies = create_monkies(&s);
         assert_eq!(monkies.len(), 4);
+        Ok(())
+    }
+
+    #[test]
+    fn test_monkey_throw() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let mut monkies = create_monkies(&s);
+
+        let throws = monkies[0].throw();
+
+        assert_eq!(throws.len(), 2);
+        assert_eq!(monkies[0].items.len(), 0);
+        assert_eq!(
+            throws[0],
+            Throw {
+                target: 3,
+                item: 500
+            }
+        );
+
+        let throws = monkies[2].throw();
+        assert_eq!(
+            throws[0],
+            Throw {
+                target: 1,
+                item: 2080
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_part1_process_throw() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let mut part1 = Part1::new(&s);
+        let throws = part1.monkies[0].throw();
+        part1.process_throw(&throws[0]);
+
+        assert_eq!(part1.monkies[3].items.len(), 2);
+        assert_eq!(*part1.monkies[3].items.last().unwrap(), 500);
+        Ok(())
+    }
+
+    #[test]
+    fn test_part1() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let mut part1 = Part1::new(&s);
+        let result = part1.run(20);
+
+        assert_eq!(part1.counts, vec![101, 95, 7, 105]);
+        assert_eq!(result, 10605);
         Ok(())
     }
 }
