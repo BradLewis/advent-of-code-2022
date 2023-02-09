@@ -55,6 +55,10 @@ fn parse_to_int(s: &str, prefix: &str) -> i32 {
     s.trim().strip_prefix(prefix).unwrap().parse().unwrap()
 }
 
+fn create_monkies(s: &str) -> Vec<Monkey> {
+    s.split("\n\n").map(|m| Monkey::new(m)).collect()
+}
+
 fn main() {
     let s = fs::read_to_string("input.txt").expect("File not found");
     part1(&s);
@@ -128,6 +132,14 @@ mod tests {
         assert_eq!(monkey.test, 3);
         assert_eq!(monkey.true_target, 4);
         assert_eq!(monkey.false_target, 5);
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_monkies() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let monkies = create_monkies(&s);
+        assert_eq!(monkies.len(), 4);
         Ok(())
     }
 }
