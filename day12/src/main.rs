@@ -1,3 +1,4 @@
+use firestorm::profile_method;
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -8,7 +9,7 @@ struct Dijkstra {
     grid: Vec<Vec<u32>>,
     width: u32,
     height: u32,
-    dist: HashMap<u32, u32>,
+    dist: Vec<u32>,
     prev: HashMap<u32, u32>,
     q: HashSet<u32>,
     start_index: (u32, u32),
@@ -47,7 +48,7 @@ impl Dijkstra {
             grid,
             width,
             height,
-            dist: HashMap::new(),
+            dist: vec![u32::MAX; (width * height) as usize],
             prev: HashMap::new(),
             q: HashSet::new(),
             start_index,
@@ -64,44 +65,48 @@ impl Dijkstra {
         let y = (value - x) / self.width;
         (x, y)
     }
+
     fn initialise(&mut self) {
+        profile_method!(initialise);
         for y in 0..self.height {
             for x in 0..self.width {
                 let index = self.get_index_value(x, y);
-                self.dist.insert(index, u32::MAX);
+                self.dist[index as usize] = u32::MAX;
                 self.prev.insert(index, 0);
                 self.q.insert(index);
             }
         }
         let (start_x, start_y) = self.start_index;
         let start_index = self.get_index_value(start_x, start_y);
-        self.dist.insert(start_index, 0);
+        self.dist[start_index as usize] = 0;
     }
 
     fn run(&mut self) -> u32 {
+        profile_method!(run);
         self.initialise();
         while !self.q.is_empty() {
             let next_index = self.get_next_vertex();
 
-            if self.dist[&next_index] == u32::MAX {
-                let (end_x, end_y) = self.end_index;
-                return self.dist[&self.get_index_value(end_x, end_y)];
+            let coords = self.get_coords_from_value(next_index);
+            if coords == self.end_index {
+                return self.dist[next_index as usize];
             }
             self.q.remove(&next_index);
             let neighbours = self.get_valid_neighbours(next_index);
             for neighbour in neighbours.iter() {
-                let new_dist = self.dist[&next_index] + 1;
-                if new_dist < self.dist[&neighbour] {
-                    self.dist.insert(*neighbour, new_dist);
+                let new_dist = self.dist[next_index as usize] + 1;
+                if new_dist < self.dist[*neighbour as usize] {
+                    self.dist[*neighbour as usize] = new_dist;
                     self.prev.insert(*neighbour, new_dist);
                 }
             }
         }
         let (end_x, end_y) = self.end_index;
-        self.dist[&self.get_index_value(end_x, end_y)]
+        self.dist[self.get_index_value(end_x, end_y) as usize]
     }
 
     fn get_valid_neighbours(&self, index: u32) -> Vec<u32> {
+        profile_method!(get_valid_neighbours);
         let (x, y) = self.get_coords_from_value(index);
         let value = self.grid[y as usize][x as usize];
         let to_check: Vec<(i32, i32)> = vec![(1, 0), (-1, 0), (0, 1), (0, -1)];
@@ -125,28 +130,24 @@ impl Dijkstra {
     }
 
     fn get_next_vertex(&self) -> u32 {
-        let mut index = u32::MAX;
-        let mut min = u32::MAX;
-        for i in self.q.iter() {
-            if index == u32::MAX {
-                index = *i;
-            }
-            if self.dist[i] < min {
-                index = *i;
-                min = self.dist[i];
-            }
-        }
-        index as u32
+        profile_method!(get_next_vertex);
+        let (min_element, _) = self
+            .q
+            .iter()
+            .map(|i| (*i, self.dist[*i as usize]))
+            .min_by_key(|(_, d)| *d)
+            .unwrap();
+        min_element
     }
 }
 
 fn main() {
-    let s = fs::read_to_string("input.txt").expect("File not found");
-    part1(&s);
+    firestorm::bench("./flames/", part1).unwrap();
 }
 
-fn part1(s: &str) {
-    let mut d = Dijkstra::new(s);
+fn part1() {
+    let s = fs::read_to_string("input.txt").expect("File not found");
+    let mut d = Dijkstra::new(&s);
     let result = d.run();
     println!("{}", result);
 }
