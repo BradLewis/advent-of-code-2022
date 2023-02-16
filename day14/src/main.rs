@@ -37,16 +37,16 @@ impl Cave {
             })
             .collect();
 
-        let mut grid = vec![vec![b'.'; max_col - min_col + 1]; max_row + 1];
+        let mut grid = vec![vec![b'.'; max_row + 1]; max_col - min_col + 1];
         for path in paths.iter() {
             for i in 1..path.len() {
                 let (mut x, mut y) = path[i - 1];
                 let (end_x, end_y) = path[i];
                 let dx = get_difference(x, end_x);
                 let dy = get_difference(y, end_y);
-                grid[end_y][end_x - min_col] = b'#';
+                grid[end_x - min_col][end_y] = b'#';
                 while x != end_x || y != end_y {
-                    grid[y][x - min_col] = b'#';
+                    grid[x - min_col][y] = b'#';
                     x = (x as isize + dx) as usize;
                     y = (y as isize + dy) as usize;
                 }
@@ -64,12 +64,19 @@ impl Cave {
     }
 
     fn print_grid(&self) {
-        for y in 0..self.grid.len() {
-            for x in 0..self.grid[0].len() {
-                print!("{}", self.grid[y][x] as char)
+        for x in 0..self.grid.len() {
+            for y in 0..self.grid[0].len() {
+                print!("{}", self.get_grid_value(x, y) as char)
             }
             print!("\n");
         }
+    }
+
+    fn get_grid_value(&self, x: usize, y: usize) -> u8 {
+        self.grid[x][y]
+    }
+    fn set_grid_value(&mut self, x: usize, y: usize, value: u8) {
+        self.grid[x][y] = value;
     }
 
     fn drop_sand(&mut self) -> bool {
@@ -85,7 +92,7 @@ impl Cave {
                 Ok(_) => (x, y) = next.unwrap(),
             }
             if x == prev_x && y == prev_y {
-                self.grid[y][x] = b'o';
+                self.set_grid_value(x, y, b'o');
                 return true;
             }
             prev_x = x;
@@ -116,7 +123,7 @@ impl Cave {
         if self.max_row < y + 1 {
             return Err(OutOfBoundsError);
         }
-        match self.grid[y + 1][x] {
+        match self.get_grid_value(x, y + 1) {
             b'.' => Ok(true),
             _ => Ok(false),
         }
@@ -129,7 +136,7 @@ impl Cave {
         if self.max_row < y + 1 {
             return Err(OutOfBoundsError);
         }
-        match self.grid[y + 1][x - 1] {
+        match self.get_grid_value(x - 1, y + 1) {
             b'.' => Ok(true),
             _ => Ok(false),
         }
@@ -142,7 +149,7 @@ impl Cave {
         if self.max_row < y + 1 {
             return Err(OutOfBoundsError);
         }
-        match self.grid[y + 1][x + 1] {
+        match self.get_grid_value(x + 1, y + 1) {
             b'.' => Ok(true),
             _ => Ok(false),
         }
@@ -193,7 +200,7 @@ mod tests {
 
         assert_eq!(cave.max_row, 9);
         assert_eq!(cave.max_col, 9);
-        assert_eq!(cave.grid[4][4], b'#');
+        assert_eq!(cave.get_grid_value(4, 4), b'#');
         Ok(())
     }
 
@@ -214,7 +221,10 @@ mod tests {
         let result = cave.drop_sand();
 
         assert_eq!(result, true);
-        assert_eq!(cave.grid[cave.max_row - 1][cave.sand_drop_x], b'o');
+        assert_eq!(
+            cave.get_grid_value(cave.sand_drop_x, cave.max_row - 1),
+            b'o'
+        );
         Ok(())
     }
 
@@ -225,6 +235,7 @@ mod tests {
 
         assert_eq!(cave.check_down(cave.sand_drop_x, 0).unwrap(), true);
         assert_eq!(cave.check_down(4, 4).unwrap(), false);
+        assert_eq!(cave.check_down(7, 8).unwrap(), false);
         assert_eq!(
             cave.check_down(cave.max_col, cave.max_row),
             Err(OutOfBoundsError)
@@ -258,6 +269,7 @@ mod tests {
     fn test_next() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
         let cave = Cave::from_string(&s);
+        cave.print_grid();
 
         assert_eq!(cave.next(7, 8).unwrap(), (7, 8));
         assert_eq!(
