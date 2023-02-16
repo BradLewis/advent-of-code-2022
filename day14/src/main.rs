@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, fs};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 struct OutOfBoundsError;
 
 struct Cave {
@@ -8,10 +8,11 @@ struct Cave {
     max_col: usize,
     max_row: usize,
     sand_drop_x: usize,
+    infinite_width: bool,
 }
 
 impl Cave {
-    fn from_string(s: &str) -> Self {
+    fn from_string(s: &str, infinite_width: bool) -> Self {
         let mut max_row: usize = 0;
         let mut min_col: usize = 500;
         let mut max_col: usize = 500;
@@ -37,6 +38,12 @@ impl Cave {
             })
             .collect();
 
+        max_row = max_row
+            + match infinite_width {
+                true => 2,
+                false => 0,
+            };
+
         let mut grid = vec![vec![b'.'; max_row + 1]; max_col - min_col + 1];
         for path in paths.iter() {
             for i in 1..path.len() {
@@ -60,12 +67,13 @@ impl Cave {
             max_col,
             max_row,
             sand_drop_x,
+            infinite_width,
         }
     }
 
     fn print_grid(&self) {
-        for x in 0..self.grid.len() {
-            for y in 0..self.grid[0].len() {
+        for y in 0..self.grid[0].len() {
+            for x in 0..self.grid.len() {
                 print!("{}", self.get_grid_value(x, y) as char)
             }
             print!("\n");
@@ -87,8 +95,14 @@ impl Cave {
 
         loop {
             let next = self.next(x, y);
+            println!("{}:{}", x, y);
             match next {
-                Err(OutOfBoundsError) => return false,
+                Err(OutOfBoundsError) => {
+                    match self.infinite_width {
+                        false => return false,
+                        true => (x, y) = self.increase_width(),
+                    };
+                }
                 Ok(_) => (x, y) = next.unwrap(),
             }
             if x == prev_x && y == prev_y {
@@ -123,10 +137,7 @@ impl Cave {
         if self.max_row < y + 1 {
             return Err(OutOfBoundsError);
         }
-        match self.get_grid_value(x, y + 1) {
-            b'.' => Ok(true),
-            _ => Ok(false),
-        }
+        Ok(self.is_empty(x, y + 1))
     }
 
     fn check_left(&self, x: usize, y: usize) -> Result<bool, OutOfBoundsError> {
@@ -136,10 +147,7 @@ impl Cave {
         if self.max_row < y + 1 {
             return Err(OutOfBoundsError);
         }
-        match self.get_grid_value(x - 1, y + 1) {
-            b'.' => Ok(true),
-            _ => Ok(false),
-        }
+        Ok(self.is_empty(x - 1, y + 1))
     }
 
     fn check_right(&self, x: usize, y: usize) -> Result<bool, OutOfBoundsError> {
@@ -149,10 +157,18 @@ impl Cave {
         if self.max_row < y + 1 {
             return Err(OutOfBoundsError);
         }
-        match self.get_grid_value(x + 1, y + 1) {
-            b'.' => Ok(true),
-            _ => Ok(false),
+        Ok(self.is_empty(x + 1, y + 1))
+    }
+
+    fn is_empty(&self, x: usize, y: usize) -> bool {
+        match self.get_grid_value(x, y) {
+            b'.' => true,
+            _ => false,
         }
+    }
+
+    fn increase_width(&self) -> (usize, usize) {
+        todo!()
     }
 }
 
@@ -176,11 +192,12 @@ fn main() {
 }
 
 fn part1(s: &str) -> u32 {
-    let mut cave = Cave::from_string(&s);
+    let mut cave = Cave::from_string(&s, false);
     let mut total = 0;
 
     loop {
         let still_dropping = cave.drop_sand();
+        cave.print_grid();
         if !still_dropping {
             return total;
         }
@@ -196,7 +213,7 @@ mod tests {
     #[test]
     fn test_load_cave() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let cave = Cave::from_string(&s);
+        let cave = Cave::from_string(&s, false);
 
         assert_eq!(cave.max_row, 9);
         assert_eq!(cave.max_col, 9);
@@ -216,7 +233,7 @@ mod tests {
     #[test]
     fn test_drop_sand() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let mut cave = Cave::from_string(&s);
+        let mut cave = Cave::from_string(&s, false);
 
         let result = cave.drop_sand();
 
@@ -231,7 +248,7 @@ mod tests {
     #[test]
     fn test_check_down() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let cave = Cave::from_string(&s);
+        let cave = Cave::from_string(&s, false);
 
         assert_eq!(cave.check_down(cave.sand_drop_x, 0).unwrap(), true);
         assert_eq!(cave.check_down(4, 4).unwrap(), false);
@@ -246,7 +263,7 @@ mod tests {
     #[test]
     fn test_check_left() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let cave = Cave::from_string(&s);
+        let cave = Cave::from_string(&s, false);
 
         assert_eq!(cave.check_left(0, cave.max_row), Err(OutOfBoundsError));
         assert_eq!(cave.check_left(4, 4).unwrap(), true);
@@ -257,7 +274,7 @@ mod tests {
     #[test]
     fn test_check_right() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let cave = Cave::from_string(&s);
+        let cave = Cave::from_string(&s, false);
 
         assert_eq!(cave.check_right(cave.max_col, 4), Err(OutOfBoundsError));
         assert_eq!(cave.check_right(4, 4).unwrap(), true);
@@ -268,7 +285,7 @@ mod tests {
     #[test]
     fn test_next() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let cave = Cave::from_string(&s);
+        let cave = Cave::from_string(&s, false);
         cave.print_grid();
 
         assert_eq!(cave.next(7, 8).unwrap(), (7, 8));
