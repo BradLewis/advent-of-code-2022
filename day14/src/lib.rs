@@ -2,9 +2,9 @@ use std::cmp::Ordering;
 
 #[derive(Debug, PartialEq)]
 enum OutOfBoundsError {
-    FallOffLeft,
-    FallOffRight,
-    FallOffBottom,
+    Left,
+    Right,
+    Bottom,
 }
 
 struct Cave {
@@ -39,7 +39,7 @@ impl Cave {
                 let coords: Vec<_> = l
                     .split(" -> ")
                     .map(|c| {
-                        let (x, y) = to_coords(&c);
+                        let (x, y) = to_coords(c);
                         if y > max_row {
                             max_row = y;
                         }
@@ -55,11 +55,10 @@ impl Cave {
             })
             .collect();
 
-        max_row = max_row
-            + match infinite_width {
-                true => 2,
-                false => 0,
-            };
+        max_row += match infinite_width {
+            true => 2,
+            false => 0,
+        };
 
         let mut grid = vec![vec![b'.'; max_row + 1]; max_col - min_col + 1];
         for path in paths.iter() {
@@ -78,13 +77,13 @@ impl Cave {
         }
 
         if infinite_width {
-            for x in 0..grid.len() {
+            (0..grid.len()).for_each(|x| {
                 let len = grid[x].len();
                 grid[x][len - 1] = b'#';
-            }
+            });
         }
         let sand_drop_x = 500 - min_col;
-        max_col = max_col - min_col;
+        max_col -= min_col;
 
         Self {
             grid,
@@ -100,7 +99,7 @@ impl Cave {
             for x in 0..self.grid.len() {
                 print!("{}", self.get_grid_value(x, y) as char)
             }
-            print!("\n");
+            println!();
         }
     }
 
@@ -120,12 +119,12 @@ impl Cave {
         loop {
             let next = self.next(x, y);
             match next {
-                Err(OutOfBoundsError::FallOffBottom) => return Sand::new(false, 0, 0),
-                Err(OutOfBoundsError::FallOffLeft) => match self.infinite_width {
+                Err(OutOfBoundsError::Bottom) => return Sand::new(false, 0, 0),
+                Err(OutOfBoundsError::Left) => match self.infinite_width {
                     false => return Sand::new(false, 0, 0),
                     true => return self.increase_width(true),
                 },
-                Err(OutOfBoundsError::FallOffRight) => match self.infinite_width {
+                Err(OutOfBoundsError::Right) => match self.infinite_width {
                     false => return Sand::new(false, 0, 0),
                     true => return self.increase_width(false),
                 },
@@ -161,36 +160,33 @@ impl Cave {
 
     fn check_down(&self, x: usize, y: usize) -> Result<bool, OutOfBoundsError> {
         if self.max_row < y + 1 {
-            return Err(OutOfBoundsError::FallOffBottom);
+            return Err(OutOfBoundsError::Bottom);
         }
         Ok(self.is_empty(x, y + 1))
     }
 
     fn check_left(&self, x: usize, y: usize) -> Result<bool, OutOfBoundsError> {
         if x == 0 {
-            return Err(OutOfBoundsError::FallOffLeft);
+            return Err(OutOfBoundsError::Left);
         }
         if self.max_row < y + 1 {
-            return Err(OutOfBoundsError::FallOffBottom);
+            return Err(OutOfBoundsError::Bottom);
         }
         Ok(self.is_empty(x - 1, y + 1))
     }
 
     fn check_right(&self, x: usize, y: usize) -> Result<bool, OutOfBoundsError> {
         if x == self.max_col {
-            return Err(OutOfBoundsError::FallOffRight);
+            return Err(OutOfBoundsError::Right);
         }
         if self.max_row < y + 1 {
-            return Err(OutOfBoundsError::FallOffBottom);
+            return Err(OutOfBoundsError::Bottom);
         }
         Ok(self.is_empty(x + 1, y + 1))
     }
 
     fn is_empty(&self, x: usize, y: usize) -> bool {
-        match self.get_grid_value(x, y) {
-            b'.' => true,
-            _ => false,
-        }
+        matches!(self.get_grid_value(x, y), b'.')
     }
 
     fn increase_width(&mut self, left: bool) -> Sand {
@@ -202,13 +198,13 @@ impl Cave {
             true => {
                 self.grid.insert(0, col);
                 self.sand_drop_x += 1;
-                return Sand::new(true, 0, self.max_row - 1);
+                Sand::new(true, 0, self.max_row - 1)
             }
             false => {
                 self.grid.push(col);
-                return Sand::new(true, self.max_col, self.max_row - 1);
+                Sand::new(true, self.max_col, self.max_row - 1)
             }
-        };
+        }
     }
 }
 
@@ -221,12 +217,12 @@ fn get_difference(x1: usize, x2: usize) -> isize {
 }
 
 fn to_coords(s: &str) -> (usize, usize) {
-    let (x, y) = s.split_once(",").unwrap();
+    let (x, y) = s.split_once(',').unwrap();
     (x.parse::<usize>().unwrap(), y.parse::<usize>().unwrap())
 }
 
 pub fn part1(s: &str) -> u32 {
-    let mut cave = Cave::from_string(&s, false);
+    let mut cave = Cave::from_string(s, false);
     let mut total = 0;
 
     loop {
@@ -239,7 +235,7 @@ pub fn part1(s: &str) -> u32 {
 }
 
 pub fn part2(s: &str) -> u32 {
-    let mut cave = Cave::from_string(&s, true);
+    let mut cave = Cave::from_string(s, true);
     let mut total = 0;
 
     loop {
@@ -286,7 +282,7 @@ mod tests {
 
         let result = cave.drop_sand();
 
-        assert_eq!(result.dropped, true);
+        assert!(result.dropped);
         assert_eq!(
             cave.get_grid_value(cave.sand_drop_x, cave.max_row - 1),
             b'o'
@@ -299,12 +295,12 @@ mod tests {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
         let cave = Cave::from_string(&s, false);
 
-        assert_eq!(cave.check_down(cave.sand_drop_x, 0).unwrap(), true);
-        assert_eq!(cave.check_down(4, 4).unwrap(), false);
-        assert_eq!(cave.check_down(7, 8).unwrap(), false);
+        assert!(cave.check_down(cave.sand_drop_x, 0).unwrap());
+        assert!(!cave.check_down(4, 4).unwrap());
+        assert!(!cave.check_down(7, 8).unwrap());
         assert_eq!(
             cave.check_down(cave.max_col, cave.max_row),
-            Err(OutOfBoundsError::FallOffBottom)
+            Err(OutOfBoundsError::Bottom)
         );
         Ok(())
     }
@@ -316,10 +312,10 @@ mod tests {
 
         assert_eq!(
             cave.check_left(0, cave.max_row),
-            Err(OutOfBoundsError::FallOffLeft)
+            Err(OutOfBoundsError::Left)
         );
-        assert_eq!(cave.check_left(4, 4).unwrap(), true);
-        assert_eq!(cave.check_left(3, 5).unwrap(), false);
+        assert!(cave.check_left(4, 4).unwrap());
+        assert!(!cave.check_left(3, 5).unwrap());
         Ok(())
     }
 
@@ -330,10 +326,10 @@ mod tests {
 
         assert_eq!(
             cave.check_right(cave.max_col, 4),
-            Err(OutOfBoundsError::FallOffRight)
+            Err(OutOfBoundsError::Right)
         );
-        assert_eq!(cave.check_right(4, 4).unwrap(), true);
-        assert_eq!(cave.check_right(3, 5).unwrap(), false);
+        assert!(cave.check_right(4, 4).unwrap());
+        assert!(!cave.check_right(3, 5).unwrap());
         Ok(())
     }
 
