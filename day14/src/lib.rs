@@ -123,18 +123,11 @@ impl Cave {
                 Err(OutOfBoundsError::FallOffBottom) => return Sand::new(false, 0, 0),
                 Err(OutOfBoundsError::FallOffLeft) => match self.infinite_width {
                     false => return Sand::new(false, 0, 0),
-                    true => {
-                        self.increase_width(true);
-                        x += 1;
-                        continue;
-                    }
+                    true => return self.increase_width(true),
                 },
                 Err(OutOfBoundsError::FallOffRight) => match self.infinite_width {
                     false => return Sand::new(false, 0, 0),
-                    true => {
-                        self.increase_width(false);
-                        continue;
-                    }
+                    true => return self.increase_width(false),
                 },
                 Ok(_) => (x, y) = next.unwrap(),
             };
@@ -200,17 +193,22 @@ impl Cave {
         }
     }
 
-    fn increase_width(&mut self, left: bool) {
-        let mut col = vec![b'.'; self.max_row];
-        col.push(b'#');
+    fn increase_width(&mut self, left: bool) -> Sand {
+        let mut col = vec![b'.'; self.max_row + 1];
+        self.max_col += 1;
+        col[self.max_row - 1] = b'o';
+        col[self.max_row] = b'#';
         match left {
             true => {
                 self.grid.insert(0, col);
-                self.sand_drop_x += 1
+                self.sand_drop_x += 1;
+                return Sand::new(true, 0, self.max_row - 1);
             }
-            false => self.grid.push(col),
+            false => {
+                self.grid.push(col);
+                return Sand::new(true, self.max_col, self.max_row - 1);
+            }
         };
-        self.max_col += 1;
     }
 }
 
@@ -373,7 +371,8 @@ mod tests {
 
         cave.increase_width(true);
 
-        let mut result = vec![b'.'; cave.max_row];
+        let mut result = vec![b'.'; cave.max_row - 1];
+        result.push(b'o');
         result.push(b'#');
 
         assert_eq!(cave.grid[0], result);
@@ -384,7 +383,8 @@ mod tests {
         let max_col = cave.max_col;
         cave.increase_width(false);
 
-        let mut result = vec![b'.'; cave.max_row];
+        let mut result = vec![b'.'; cave.max_row - 1];
+        result.push(b'o');
         result.push(b'#');
 
         let len = cave.grid.len();
