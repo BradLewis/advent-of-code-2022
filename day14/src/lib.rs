@@ -125,15 +125,15 @@ impl Cave {
                     false => return Sand::new(false, 0, 0),
                     true => {
                         self.increase_width(true);
-                        y += 1;
+                        x += 1;
+                        continue;
                     }
                 },
                 Err(OutOfBoundsError::FallOffRight) => match self.infinite_width {
                     false => return Sand::new(false, 0, 0),
                     true => {
                         self.increase_width(false);
-                        x += 1;
-                        y += 1;
+                        continue;
                     }
                 },
                 Ok(_) => (x, y) = next.unwrap(),
@@ -242,13 +242,12 @@ pub fn part1(s: &str) -> u32 {
 
 pub fn part2(s: &str) -> u32 {
     let mut cave = Cave::from_string(&s, true);
-    let mut total = 1;
+    let mut total = 0;
 
     loop {
         let sand = cave.drop_sand();
-        if sand.x != 0 && sand.y != 0 {
-            total += 1;
-        }
+        total += 1;
+
         if sand.x == cave.sand_drop_x && sand.y == 0 {
             return total;
         }
