@@ -83,6 +83,7 @@ fn str_strip_numbers(s: &str) -> Vec<isize> {
 }
 
 fn merge_ranges(arr: &mut Vec<Range>) -> Vec<Range> {
+    profile_fn!(merge_ranges);
     arr.sort_by(|a, b| a.start.cmp(&b.start));
     let mut result: Vec<Range> = Vec::new();
     result.push(arr[0]);
