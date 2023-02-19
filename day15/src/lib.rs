@@ -88,6 +88,8 @@ pub fn part1(s: &str, row: isize) -> usize {
     overlaps.len()
 }
 
+pub fn part2(s: &str) {}
+
 #[cfg(test)]
 mod tests {
 
