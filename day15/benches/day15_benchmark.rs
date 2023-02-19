@@ -9,7 +9,7 @@ fn part1_benchmark(c: &mut Criterion) {
 }
 
 fn part2_benchmark(c: &mut Criterion) {
-    let s = fs::read_to_string("input.txt").expect("File not found");
+    let s = fs::read_to_string("test_input.txt").expect("File not found");
     c.bench_function("part 2", |b| b.iter(|| part2(&s, 4000000)));
 }
 

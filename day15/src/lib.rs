@@ -3,6 +3,7 @@ extern crate lazy_static;
 
 use std::{cmp, collections::BTreeSet};
 
+use firestorm::{profile_fn, profile_method};
 use regex::Regex;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -41,10 +42,21 @@ impl Sensor {
     }
 
     fn get_overlap(&self, y: isize) -> Vec<isize> {
+        profile_method!(get_overlap);
         let common = self.closest_beacon_distance - (y - self.position.y).abs();
         let x_start = self.position.x - common;
         let x_end = self.position.x + common;
         (x_start..x_end + 1).collect()
+    }
+    fn get_overlap_min_max(&self, y: isize, min_x: isize, max_x: isize) -> Vec<isize> {
+        profile_method!(get_overlap_min_max);
+        let common = self.closest_beacon_distance - (y - self.position.y).abs();
+        if common < 0 {
+            return Vec::new();
+        }
+        let x_start = cmp::max(self.position.x - common, min_x);
+        let x_end = cmp::min(self.position.x + common + 1, max_x);
+        (x_start..x_end).collect()
     }
 }
 
@@ -66,11 +78,12 @@ fn str_strip_numbers(s: &str) -> Vec<isize> {
 }
 
 pub fn part1(s: &str, row: isize) -> usize {
+    profile_fn!(part1);
     let mut max_x = isize::MIN;
     let mut min_x = isize::MAX;
     let mut beacons_on_row: BTreeSet<isize> = BTreeSet::new();
 
-    let overlaps: BTreeSet<isize> = s
+    let overlaps: BTreeSet<_> = s
         .lines()
         .map(|l| {
             let sensor = Sensor::from_string(l);
@@ -87,7 +100,25 @@ pub fn part1(s: &str, row: isize) -> usize {
     overlaps.len() - beacons_on_row.len()
 }
 
-pub fn part2(s: &str, max_row: usize) {}
+pub fn part2(s: &str, max_row: usize) -> isize {
+    profile_fn!(part2);
+    let sensors: Vec<_> = s.lines().map(Sensor::from_string).collect();
+    for i in 0..max_row {
+        let overlaps: BTreeSet<_> = sensors
+            .iter()
+            .flat_map(|s| s.get_overlap_min_max(i as isize, 0, max_row as isize))
+            .collect();
+        if overlaps.len() == max_row {
+            continue;
+        }
+        for j in 0..max_row as isize {
+            if !overlaps.contains(&j) {
+                return 4000000 * j + (i as isize);
+            }
+        }
+    }
+    unreachable!();
+}
 
 #[cfg(test)]
 mod tests {
@@ -134,6 +165,15 @@ mod tests {
         let result = part1(&s, 10);
 
         assert_eq!(result, 26);
+        Ok(())
+    }
+
+    #[test]
+    fn test_part2() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let result = part2(&s, 20);
+
+        assert_eq!(result, 56000011);
         Ok(())
     }
 }
