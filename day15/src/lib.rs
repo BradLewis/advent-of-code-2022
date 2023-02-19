@@ -12,6 +12,18 @@ struct Point {
     y: isize,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+struct Range {
+    start: isize,
+    end: isize,
+}
+
+impl Range {
+    fn new(start: isize, end: isize) -> Self {
+        Self { start, end }
+    }
+}
+
 #[derive(Debug)]
 struct Sensor {
     position: Point,
@@ -41,22 +53,15 @@ impl Sensor {
         Self::new(position, closest_beacon)
     }
 
-    fn get_overlap(&self, y: isize) -> Vec<isize> {
+    fn get_overlap(&self, y: isize) -> Option<Range> {
         profile_method!(get_overlap);
         let common = self.closest_beacon_distance - (y - self.position.y).abs();
+        if common < 0 {
+            return None;
+        }
         let x_start = self.position.x - common;
         let x_end = self.position.x + common;
-        (x_start..x_end + 1).collect()
-    }
-    fn get_overlap_min_max(&self, y: isize, min_x: isize, max_x: isize) -> Vec<isize> {
-        profile_method!(get_overlap_min_max);
-        let common = self.closest_beacon_distance - (y - self.position.y).abs();
-        if common < 0 {
-            return Vec::new();
-        }
-        let x_start = cmp::max(self.position.x - common, min_x);
-        let x_end = cmp::min(self.position.x + common + 1, max_x);
-        (x_start..x_end).collect()
+        Some(Range::new(x_start, x_end))
     }
 }
 
@@ -77,46 +82,63 @@ fn str_strip_numbers(s: &str) -> Vec<isize> {
         .collect()
 }
 
-pub fn part1(s: &str, row: isize) -> usize {
+fn merge_ranges(arr: &mut Vec<Range>) -> Vec<Range> {
+    arr.sort_by(|a, b| a.start.cmp(&b.start));
+    let mut result: Vec<Range> = Vec::new();
+    result.push(arr[0]);
+
+    (1..arr.len()).for_each(|i| {
+        let current = arr[i];
+        let j: usize = result.len() - 1;
+
+        if current.start >= result[j].start && current.start <= result[j].end + 1 {
+            result[j].end = cmp::max(current.end, result[j].end);
+        } else {
+            result.push(current);
+        }
+    });
+    result
+}
+
+pub fn part1(s: &str, row: isize) -> isize {
     profile_fn!(part1);
-    let mut max_x = isize::MIN;
-    let mut min_x = isize::MAX;
     let mut beacons_on_row: BTreeSet<isize> = BTreeSet::new();
 
-    let overlaps: BTreeSet<_> = s
+    let mut overlaps: Vec<Range> = s
         .lines()
-        .map(|l| {
+        .filter_map(|l| {
             let sensor = Sensor::from_string(l);
             if sensor.closest_beacon.y == row {
                 beacons_on_row.insert(sensor.closest_beacon.x);
             }
-            max_x = cmp::max(max_x, cmp::max(sensor.closest_beacon.x, sensor.position.x));
-            min_x = cmp::min(min_x, cmp::min(sensor.closest_beacon.x, sensor.position.x));
             sensor.get_overlap(row)
         })
-        .into_iter()
-        .flatten()
         .collect();
-    overlaps.len() - beacons_on_row.len()
+    let ranges = merge_ranges(&mut overlaps);
+    let mut count = 0;
+    for range in ranges.iter() {
+        count += range.end - range.start + 1;
+    }
+    count - beacons_on_row.len() as isize
 }
 
 pub fn part2(s: &str, max_row: usize) -> isize {
     profile_fn!(part2);
     let sensors: Vec<_> = s.lines().map(Sensor::from_string).collect();
-    for i in 0..max_row {
-        let overlaps: BTreeSet<_> = sensors
-            .iter()
-            .flat_map(|s| s.get_overlap_min_max(i as isize, 0, max_row as isize))
-            .collect();
-        if overlaps.len() == max_row {
-            continue;
-        }
-        for j in 0..max_row as isize {
-            if !overlaps.contains(&j) {
-                return 4000000 * j + (i as isize);
-            }
-        }
-    }
+    // for i in 0..max_row {
+    //     let overlaps: BTreeSet<_> = sensors
+    //         .iter()
+    //         .filter_map(|s| s.get_overlap(i as isize))
+    //         .collect();
+    //     if overlaps.len() == max_row {
+    //         continue;
+    //     }
+    //     for j in 0..max_row as isize {
+    //         if !overlaps.contains(&j) {
+    //             return 4000000 * j + (i as isize);
+    //         }
+    //     }
+    // }
     unreachable!();
 }
 
@@ -147,8 +169,8 @@ mod tests {
         let sensor = Sensor::new(Point { x: 1, y: 3 }, Point { x: 1, y: 8 });
         let overlap = sensor.get_overlap(1);
 
-        let result: Vec<isize> = (-2..5).collect();
-        assert_eq!(overlap, result);
+        let result = Range::new(-2, 4);
+        assert_eq!(overlap, Some(result));
         Ok(())
     }
 
@@ -174,6 +196,28 @@ mod tests {
         let result = part2(&s, 20);
 
         assert_eq!(result, 56000011);
+        Ok(())
+    }
+
+    #[test]
+    fn test_merge_ranges() -> Result<(), String> {
+        let result = merge_ranges(&mut vec![Range::new(1, 4), Range::new(2, 10)]);
+        assert_eq!(result, vec![Range::new(1, 10)]);
+
+        let result = merge_ranges(&mut vec![Range::new(1, 4), Range::new(6, 10)]);
+        assert_eq!(result, vec![Range::new(1, 4), Range::new(6, 10)]);
+
+        let result = merge_ranges(&mut vec![Range::new(1, 4), Range::new(5, 10)]);
+        assert_eq!(result, vec![Range::new(1, 10)]);
+
+        let result = merge_ranges(&mut vec![
+            Range::new(12, 12),
+            Range::new(2, 14),
+            Range::new(-2, 2),
+            Range::new(16, 24),
+            Range::new(14, 18),
+        ]);
+        assert_eq!(result, vec![Range::new(-2, 24)]);
         Ok(())
     }
 }
