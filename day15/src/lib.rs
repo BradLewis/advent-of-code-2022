@@ -125,20 +125,16 @@ pub fn part1(s: &str, row: isize) -> isize {
 pub fn part2(s: &str, max_row: usize) -> isize {
     profile_fn!(part2);
     let sensors: Vec<_> = s.lines().map(Sensor::from_string).collect();
-    // for i in 0..max_row {
-    //     let overlaps: BTreeSet<_> = sensors
-    //         .iter()
-    //         .filter_map(|s| s.get_overlap(i as isize))
-    //         .collect();
-    //     if overlaps.len() == max_row {
-    //         continue;
-    //     }
-    //     for j in 0..max_row as isize {
-    //         if !overlaps.contains(&j) {
-    //             return 4000000 * j + (i as isize);
-    //         }
-    //     }
-    // }
+    for i in 0..max_row {
+        let mut overlaps: Vec<_> = sensors
+            .iter()
+            .filter_map(|s| s.get_overlap(i as isize))
+            .collect();
+        let ranges = merge_ranges(&mut overlaps);
+        if ranges.len() != 1 {
+            return 4000000 * (ranges[0].end + 1) + (i as isize);
+        }
+    }
     unreachable!();
 }
 
