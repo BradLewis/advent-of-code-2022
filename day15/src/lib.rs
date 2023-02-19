@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-use std::{cmp, collections::HashSet};
+use std::{cmp, collections::BTreeSet};
 
 use regex::Regex;
 
@@ -40,7 +40,7 @@ impl Sensor {
         Self::new(position, closest_beacon)
     }
 
-    fn get_overlap(&self, y: isize) -> HashSet<isize> {
+    fn get_overlap(&self, y: isize) -> BTreeSet<isize> {
         let common = self.closest_beacon_distance - (y - self.position.y).abs();
         let x_start = self.position.x - common;
         let x_end = self.position.x + common;
@@ -68,9 +68,9 @@ fn str_strip_numbers(s: &str) -> Vec<isize> {
 pub fn part1(s: &str, row: isize) -> usize {
     let mut max_x = isize::MIN;
     let mut min_x = isize::MAX;
-    let mut beacons_on_row: HashSet<isize> = HashSet::new();
+    let mut beacons_on_row: BTreeSet<isize> = BTreeSet::new();
 
-    let mut overlaps: HashSet<isize> = s
+    let mut overlaps: BTreeSet<isize> = s
         .lines()
         .map(|l| {
             let sensor = Sensor::from_string(l);
@@ -117,7 +117,7 @@ mod tests {
         let sensor = Sensor::new(Point { x: 1, y: 3 }, Point { x: 1, y: 8 });
         let overlap = sensor.get_overlap(1);
 
-        let result: HashSet<isize> = (-2..5).collect();
+        let result: BTreeSet<isize> = (-2..5).collect();
         assert_eq!(overlap, result);
         Ok(())
     }
