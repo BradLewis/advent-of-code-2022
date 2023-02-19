@@ -40,7 +40,7 @@ impl Sensor {
         Self::new(position, closest_beacon)
     }
 
-    fn get_overlap(&self, y: isize) -> BTreeSet<isize> {
+    fn get_overlap(&self, y: isize) -> Vec<isize> {
         let common = self.closest_beacon_distance - (y - self.position.y).abs();
         let x_start = self.position.x - common;
         let x_end = self.position.x + common;
@@ -70,7 +70,7 @@ pub fn part1(s: &str, row: isize) -> usize {
     let mut min_x = isize::MAX;
     let mut beacons_on_row: BTreeSet<isize> = BTreeSet::new();
 
-    let mut overlaps: BTreeSet<isize> = s
+    let overlaps: BTreeSet<isize> = s
         .lines()
         .map(|l| {
             let sensor = Sensor::from_string(l);
@@ -84,11 +84,10 @@ pub fn part1(s: &str, row: isize) -> usize {
         .into_iter()
         .flatten()
         .collect();
-    overlaps.retain(|e| !beacons_on_row.contains(e));
-    overlaps.len()
+    overlaps.len() - beacons_on_row.len()
 }
 
-pub fn part2(s: &str) {}
+pub fn part2(s: &str, max_row: usize) {}
 
 #[cfg(test)]
 mod tests {
@@ -117,7 +116,7 @@ mod tests {
         let sensor = Sensor::new(Point { x: 1, y: 3 }, Point { x: 1, y: 8 });
         let overlap = sensor.get_overlap(1);
 
-        let result: BTreeSet<isize> = (-2..5).collect();
+        let result: Vec<isize> = (-2..5).collect();
         assert_eq!(overlap, result);
         Ok(())
     }
