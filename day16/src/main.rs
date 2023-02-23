@@ -2,7 +2,7 @@ use day16::cave::{Cave, Name, State};
 use std::{collections::HashSet, fs};
 
 fn main() {
-    let s = fs::read_to_string("test_input.txt").expect("File not found");
+    let s = fs::read_to_string("input.txt").expect("File not found");
     let mut cave = Cave::from_string(s);
     cave.minimise();
     let mut state = State {
@@ -15,6 +15,7 @@ fn main() {
         total_pressure: 0,
         open_valves: HashSet::new(),
     };
-    let (state, moves) = state.calculate_best_moves();
+    let (state, mut moves) = state.calculate_best_moves();
+    moves.reverse();
     println!("{:?} - {}", moves, state.total_pressure);
 }

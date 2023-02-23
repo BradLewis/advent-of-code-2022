@@ -8,8 +8,15 @@ use std::{
 use bimap::BiMap;
 use regex::Regex;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Name(pub [u8; 2]);
+
+impl fmt::Debug for Name {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let [a, b] = self.0;
+        write!(f, "{}{}", a as char, b as char)
+    }
+}
 
 impl fmt::Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -34,7 +41,7 @@ impl Valve {
         if !self.connections.contains_key(&valve.name) {
             return;
         }
-        self.connections.remove(&valve.name);
+        let d = self.connections.remove(&valve.name).unwrap();
         for (connection, distance) in valve.connections.iter() {
             if connection == &self.name {
                 continue;
@@ -42,10 +49,10 @@ impl Valve {
             if self.connections.contains_key(connection) {
                 self.connections.insert(
                     *connection,
-                    (distance + 1).min(self.connections[connection]),
+                    (distance + d).min(self.connections[connection]),
                 );
             } else {
-                self.connections.insert(*connection, distance + 1);
+                self.connections.insert(*connection, distance + d);
             }
         }
     }
@@ -87,42 +94,19 @@ impl Cave {
         }
     }
 
-    pub fn minimise(&mut self) {
-        self.contract_zero_valves();
-        let mut zero_valves: Vec<Valve> = Vec::new();
-        let aa = &Name(*b"AA");
-        for name in self.zero_valves.iter() {
-            if name == aa {
-                let v = self.valves.get(name).unwrap().clone();
-                zero_valves.push(v);
-            } else {
-                let v = self.valves.remove(name).unwrap();
-                zero_valves.push(v);
-            }
-        }
-        for (name, valve) in self.valves.iter_mut() {
-            if name == aa {
-                continue;
-            }
-            for zv in zero_valves.iter() {
-                valve.combine_connections(zv);
-            }
+    fn remove_valve(&mut self, valve: &Valve) {
+        for (_, v) in self.valves.iter_mut() {
+            v.combine_connections(valve);
         }
     }
 
-    fn contract_zero_valves(&mut self) {
+    pub fn minimise(&mut self) {
+        let aa = Name(*b"AA");
         for i in 0..self.zero_valves.len() {
-            for j in 0..self.zero_valves.len() {
-                if i == j {
-                    continue;
-                }
-                let name1 = &self.zero_valves[i];
-                let name2 = &self.zero_valves[j];
-                let v2 = self.valves.remove(name2).unwrap();
-
-                let v1 = self.valves.get_mut(name1).unwrap();
-                v1.combine_connections(&v2);
-                self.valves.insert(v2.name, v2);
+            let zv = self.valves.remove(&self.zero_valves[i]).unwrap();
+            self.remove_valve(&zv);
+            if self.zero_valves[i] == aa {
+                self.valves.insert(aa, zv);
             }
         }
     }
@@ -268,6 +252,9 @@ impl State<'_> {
                     return None;
                 }
                 let valve = &self.cave.valves[&target];
+                if valve.flow_rate == 0 {
+                    return None;
+                }
                 let reward = valve.flow_rate * (self.iterations_left() as i32 - cost as i32);
                 if reward == 0 {
                     return None;
@@ -349,31 +336,6 @@ mod tests {
         assert_eq!(
             valve_gg.connections,
             HashMap::from([(Name(*b"HH"), 1), (Name(*b"EE"), 2)])
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_contract_zero_valves() -> Result<(), String> {
-        let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let mut cave = Cave::from_string(s);
-        cave.contract_zero_valves();
-        let valve_ff = cave.valves.get(&Name(*b"FF")).unwrap();
-        assert_eq!(
-            valve_ff.connections,
-            HashMap::from([(Name(*b"EE"), 1), (Name(*b"HH"), 2)])
-        );
-
-        let valve_gg = cave.valves.get(&Name(*b"GG")).unwrap();
-        assert_eq!(
-            valve_gg.connections,
-            HashMap::from([(Name(*b"HH"), 1), (Name(*b"EE"), 2)])
-        );
-
-        let valve_aa = cave.valves.get(&Name(*b"AA")).unwrap();
-        assert_eq!(
-            valve_aa.connections,
-            HashMap::from([(Name(*b"JJ"), 2), (Name(*b"BB"), 1), (Name(*b"DD"), 1)])
         );
         Ok(())
     }
