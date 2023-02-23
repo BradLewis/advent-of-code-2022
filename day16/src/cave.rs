@@ -65,7 +65,7 @@ pub struct Cave {
 }
 
 impl Cave {
-    pub fn from_string(s: String) -> Self {
+    pub fn from_str(s: &str) -> Self {
         let mut zero_valves: Vec<Name> = Vec::new();
         let valves: HashMap<_, _> = s
             .lines()
@@ -193,7 +193,6 @@ pub struct State<'a> {
     pub iteration: u32,
     pub total_pressure: i32,
     pub open_valves: HashSet<Name>,
-    pub cached_values: Vec<Vec<i32>>,
 }
 
 impl State<'_> {
@@ -201,42 +200,19 @@ impl State<'_> {
         self.max_iterations - self.iteration
     }
 
-    fn set_cache(&mut self, iteration: u32, cost: u32, position: Name, value: i32) {
-        for i in 0..cost {
-            let c = self.cached_values[(iteration + i) as usize]
-                [*self.valve_index_map.get_by_left(&position).unwrap()];
-            if value > c {
-                self.cached_values[(self.iteration + i) as usize + 1]
-                    [*self.valve_index_map.get_by_left(&self.position).unwrap()] = value;
-            }
-        }
-    }
-
-    fn merge_cache(&mut self, cache: &Vec<Vec<i32>>) {
-        for i in 0..cache.len() {
-            for j in 0..cache[0].len() {
-                if self.cached_values[i][j] < cache[i][j] {
-                    self.cached_values[i][j] = cache[i][j];
-                }
-            }
-        }
-    }
-
-    pub fn calculate_best_moves(&mut self) -> (Self, Vec<Move>) {
+    pub fn calculate_best_moves(&mut self, bitmask: u32) -> (Self, Vec<Move>) {
         let mut best_moves = Vec::new();
         let mut best_state = self.clone();
         let mut best_pressure = 0;
 
-        let moves = self.calculate_moves();
+        let moves = self.calculate_moves(bitmask);
         for m in moves.iter() {
             let mut next = self.apply_move(m);
-            self.set_cache(self.iteration, m.cost, self.position, next.total_pressure);
             if next.iterations_left() == 0 {
                 continue;
             }
-            let (next, mut next_moves) = next.calculate_best_moves();
+            let (next, mut next_moves) = next.calculate_best_moves(bitmask);
             next_moves.push(*m);
-            self.merge_cache(&next.cached_values);
             if next.total_pressure > best_pressure {
                 best_pressure = next.total_pressure;
                 best_moves = next_moves;
@@ -257,7 +233,7 @@ impl State<'_> {
         next
     }
 
-    fn calculate_moves(&self) -> Vec<Move> {
+    fn calculate_moves(&self, bitmask: u32) -> Vec<Move> {
         self.distance_matrix[*self.valve_index_map.get_by_left(&self.position).unwrap()]
             .iter()
             .enumerate()
@@ -268,6 +244,10 @@ impl State<'_> {
                 if *distance == u32::MAX {
                     return None;
                 }
+                if (bitmask >> (i - 1)) % 2 == 0 {
+                    return None;
+                }
+
                 let cost = *distance + 1;
                 if cost > self.iterations_left() {
                     return None;
@@ -292,6 +272,30 @@ impl State<'_> {
             })
             .collect()
     }
+}
+
+pub fn run_with_elephant(s: &str) -> i32 {
+    let mut cave = Cave::from_str(s);
+    cave.minimise();
+    let mut state = State {
+        cave: &cave,
+        distance_matrix: &cave.calculate_distance_matrix(),
+        valve_index_map: &cave.generate_valve_index_map(),
+        position: Name(*b"AA"),
+        iteration: 0,
+        max_iterations: 26,
+        total_pressure: 0,
+        open_valves: HashSet::new(),
+    };
+    let total = 2_u32.pow((cave.valves.len() - 1) as u32 - 1);
+    let mut best_pressure = 0;
+    for i in 0..total {
+        let (state1, _) = state.calculate_best_moves(i);
+        let (state2, _) = state.calculate_best_moves(u32::MAX - i);
+        let pressure = state1.total_pressure + state2.total_pressure;
+        best_pressure = best_pressure.max(pressure);
+    }
+    best_pressure
 }
 
 #[cfg(test)]
@@ -322,7 +326,7 @@ mod tests {
     #[test]
     fn test_load_cave() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let cave = Cave::from_string(s);
+        let cave = Cave::from_str(&s);
         assert_eq!(cave.valves.len(), 10);
         assert_eq!(cave.valves[&Name(*b"AA")].connections.len(), 3);
         Ok(())
@@ -331,7 +335,7 @@ mod tests {
     #[test]
     fn test_minimising_cave() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let mut cave = Cave::from_string(s);
+        let mut cave = Cave::from_str(&s);
         cave.minimise();
         assert_eq!(cave.valves.len(), 7);
         let ee_valve = &cave.valves[&Name(*b"EE")];
@@ -368,7 +372,7 @@ mod tests {
     #[test]
     fn test_get_distance_matrix() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let mut cave = Cave::from_string(s);
+        let mut cave = Cave::from_str(&s);
         cave.minimise();
         let dm = cave.calculate_distance_matrix();
         assert_eq!(
@@ -390,7 +394,7 @@ mod tests {
     fn test_generate_valve_index_map() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
 
-        let mut cave = Cave::from_string(s);
+        let mut cave = Cave::from_str(&s);
         cave.minimise();
         let vim = cave.generate_valve_index_map();
         assert_eq!(
@@ -411,7 +415,7 @@ mod tests {
     #[test]
     fn test_calculate_best_moves() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let mut cave = Cave::from_string(s);
+        let mut cave = Cave::from_str(&s);
         cave.minimise();
         let mut state = State {
             cave: &cave,
@@ -422,17 +426,36 @@ mod tests {
             max_iterations: 30,
             total_pressure: 0,
             open_valves: HashSet::new(),
-            cached_values: Vec::new(),
         };
-        let (state, _) = state.calculate_best_moves();
+        let (state, _) = state.calculate_best_moves(u32::MAX);
         assert_eq!(state.total_pressure, 1651);
+        Ok(())
+    }
+
+    #[test]
+    fn test_bitmask() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let mut cave = Cave::from_str(&s);
+        cave.minimise();
+        let mut state = State {
+            cave: &cave,
+            distance_matrix: &cave.calculate_distance_matrix(),
+            valve_index_map: &cave.generate_valve_index_map(),
+            position: Name(*b"AA"),
+            iteration: 0,
+            max_iterations: 30,
+            total_pressure: 0,
+            open_valves: HashSet::new(),
+        };
+        let (state, _) = state.calculate_best_moves(0);
+        assert_eq!(state.total_pressure, 0);
         Ok(())
     }
 
     #[test]
     fn test_calculate_moves() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let mut cave = Cave::from_string(s);
+        let mut cave = Cave::from_str(&s);
         cave.minimise();
         let state = State {
             cave: &cave,
@@ -443,9 +466,8 @@ mod tests {
             max_iterations: 3,
             total_pressure: 0,
             open_valves: HashSet::new(),
-            cached_values: Vec::new(),
         };
-        let result = state.calculate_moves();
+        let result = state.calculate_moves(u32::MAX);
         assert_eq!(
             result,
             vec![
@@ -465,9 +487,9 @@ mod tests {
     }
 
     #[test]
-    fn test_part2() -> Result<(), String> {
+    fn test_bitmask_with_elephant() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let mut cave = Cave::from_string(s);
+        let mut cave = Cave::from_str(&s);
         cave.minimise();
         let mut state = State {
             cave: &cave,
@@ -475,13 +497,22 @@ mod tests {
             valve_index_map: &cave.generate_valve_index_map(),
             position: Name(*b"AA"),
             iteration: 0,
-            max_iterations: 15,
+            max_iterations: 26,
             total_pressure: 0,
             open_valves: HashSet::new(),
-            cached_values: Vec::new(),
         };
-        let (state, _) = state.calculate_best_moves();
-        assert_eq!(state.total_pressure, 1707);
+        let mask = 0b100011;
+        let (state1, _) = state.calculate_best_moves(mask);
+        let (state2, _) = state.calculate_best_moves(u32::MAX - mask);
+        assert_eq!(state1.total_pressure + state2.total_pressure, 1707);
+        Ok(())
+    }
+
+    #[test]
+    fn test_part2() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let result = run_with_elephant(&s);
+        assert_eq!(result, 1707);
         Ok(())
     }
 }
