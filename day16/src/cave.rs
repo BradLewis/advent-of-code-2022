@@ -30,7 +30,7 @@ impl Name {
     }
 }
 #[derive(Debug, Clone)]
-struct Valve {
+pub struct Valve {
     name: Name,
     flow_rate: i32,
     connections: HashMap<Name, u32>,
@@ -60,7 +60,7 @@ impl Valve {
 
 #[derive(Debug)]
 pub struct Cave {
-    valves: HashMap<Name, Valve>,
+    pub valves: HashMap<Name, Valve>,
     zero_valves: Vec<Name>,
 }
 
@@ -193,11 +193,33 @@ pub struct State<'a> {
     pub iteration: u32,
     pub total_pressure: i32,
     pub open_valves: HashSet<Name>,
+    pub cached_values: Vec<Vec<i32>>,
 }
 
 impl State<'_> {
     fn iterations_left(&self) -> u32 {
         self.max_iterations - self.iteration
+    }
+
+    fn set_cache(&mut self, iteration: u32, cost: u32, position: Name, value: i32) {
+        for i in 0..cost {
+            let c = self.cached_values[(iteration + i) as usize]
+                [*self.valve_index_map.get_by_left(&position).unwrap()];
+            if value > c {
+                self.cached_values[(self.iteration + i) as usize + 1]
+                    [*self.valve_index_map.get_by_left(&self.position).unwrap()] = value;
+            }
+        }
+    }
+
+    fn merge_cache(&mut self, cache: &Vec<Vec<i32>>) {
+        for i in 0..cache.len() {
+            for j in 0..cache[0].len() {
+                if self.cached_values[i][j] < cache[i][j] {
+                    self.cached_values[i][j] = cache[i][j];
+                }
+            }
+        }
     }
 
     pub fn calculate_best_moves(&mut self) -> (Self, Vec<Move>) {
@@ -208,11 +230,13 @@ impl State<'_> {
         let moves = self.calculate_moves();
         for m in moves.iter() {
             let mut next = self.apply_move(m);
+            self.set_cache(self.iteration, m.cost, self.position, next.total_pressure);
             if next.iterations_left() == 0 {
                 continue;
             }
             let (next, mut next_moves) = next.calculate_best_moves();
             next_moves.push(*m);
+            self.merge_cache(&next.cached_values);
             if next.total_pressure > best_pressure {
                 best_pressure = next.total_pressure;
                 best_moves = next_moves;
@@ -225,10 +249,11 @@ impl State<'_> {
 
     fn apply_move(&self, m: &Move) -> Self {
         let mut next = self.clone();
+        next.total_pressure += m.reward;
         next.position = m.target;
         next.iteration += m.cost;
-        next.total_pressure += m.reward;
         next.open_valves.insert(m.target);
+
         next
     }
 
@@ -397,6 +422,7 @@ mod tests {
             max_iterations: 30,
             total_pressure: 0,
             open_valves: HashSet::new(),
+            cached_values: Vec::new(),
         };
         let (state, _) = state.calculate_best_moves();
         assert_eq!(state.total_pressure, 1651);
@@ -417,6 +443,7 @@ mod tests {
             max_iterations: 3,
             total_pressure: 0,
             open_valves: HashSet::new(),
+            cached_values: Vec::new(),
         };
         let result = state.calculate_moves();
         assert_eq!(
@@ -434,6 +461,27 @@ mod tests {
                 }
             ]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_part2() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let mut cave = Cave::from_string(s);
+        cave.minimise();
+        let mut state = State {
+            cave: &cave,
+            distance_matrix: &cave.calculate_distance_matrix(),
+            valve_index_map: &cave.generate_valve_index_map(),
+            position: Name(*b"AA"),
+            iteration: 0,
+            max_iterations: 15,
+            total_pressure: 0,
+            open_valves: HashSet::new(),
+            cached_values: Vec::new(),
+        };
+        let (state, _) = state.calculate_best_moves();
+        assert_eq!(state.total_pressure, 1707);
         Ok(())
     }
 }
