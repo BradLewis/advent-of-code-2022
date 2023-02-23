@@ -7,11 +7,14 @@ fn main() {
     cave.minimise();
     let mut state = State {
         cave: &cave,
+        distance_matrix: &cave.calculate_distance_matrix(),
+        valve_index_map: &cave.generate_valve_index_map(),
         position: Name(*b"AA"),
         iteration: 0,
         max_iterations: 30,
         total_pressure: 0,
         open_valves: HashSet::new(),
     };
-    let result = state.run();
+    let (state, moves) = state.calculate_best_moves();
+    println!("{:?} - {}", moves, state.total_pressure);
 }

@@ -5,6 +5,7 @@ use std::{
     str::FromStr,
 };
 
+use bimap::BiMap;
 use regex::Regex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -20,15 +21,10 @@ impl Name {
     fn from_string(s: String) -> Self {
         Self(s.as_bytes().try_into().expect("Name was incorrect size"))
     }
-
-    fn from_str(s: &str) -> Self {
-        Self::from_string(s.to_string())
-    }
 }
 #[derive(Debug, Clone)]
 struct Valve {
     name: Name,
-    open: bool,
     flow_rate: i32,
     connections: HashMap<Name, u32>,
 }
@@ -80,7 +76,6 @@ impl Cave {
                 let valve = Valve {
                     name,
                     connections: valves_in_line.into_iter().map(|v| (v, 1)).collect(),
-                    open: false,
                     flow_rate,
                 };
                 (name, valve)
@@ -142,15 +137,15 @@ impl Cave {
         }
     }
 
-    fn calculate_distance_matrix(&self) -> Vec<Vec<u32>> {
+    pub fn calculate_distance_matrix(&self) -> Vec<Vec<u32>> {
         let index_map = self.generate_valve_index_map();
         let len = self.valves.len();
         let mut result = vec![vec![u32::MAX; len]; len];
         for (name, valve) in self.valves.iter() {
             for (connection, distance) in valve.connections.iter() {
-                let index_y = index_map[name];
-                let index_x = index_map[connection];
-                result[index_y][index_x] = *distance;
+                let index_y = index_map.get_by_left(name).unwrap();
+                let index_x = index_map.get_by_left(connection).unwrap();
+                result[*index_y][*index_x] = *distance;
             }
         }
         (0..len).for_each(|i| {
@@ -175,7 +170,7 @@ impl Cave {
         result
     }
 
-    fn generate_valve_index_map(&self) -> HashMap<Name, usize> {
+    pub fn generate_valve_index_map(&self) -> BiMap<Name, usize> {
         let mut names: Vec<_> = self.valves.iter().map(|v| v.0).collect();
         names.sort();
         names
@@ -197,58 +192,93 @@ fn parse<T: FromStr>(s: &str, re: &str) -> Vec<T> {
         .collect()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Move {
+    target: Name,
+    cost: u32,
+    reward: i32,
+}
+
 #[derive(Debug, Clone)]
 pub struct State<'a> {
     pub cave: &'a Cave,
+    pub distance_matrix: &'a Vec<Vec<u32>>,
+    pub valve_index_map: &'a BiMap<Name, usize>,
     pub position: Name,
     pub max_iterations: u32,
     pub iteration: u32,
     pub total_pressure: i32,
-    pub open_valves: HashSet<usize>,
+    pub open_valves: HashSet<Name>,
 }
 
 impl State<'_> {
-    pub fn run(&mut self) -> i32 {
-        let distance_matrix = self.cave.calculate_distance_matrix();
-        let valve_map = self.cave.generate_valve_index_map();
-        let binding = valve_map.clone();
-        let index_map: HashMap<_, _> = binding.iter().map(|(k, v)| (v, k)).collect();
+    fn iterations_left(&self) -> u32 {
+        self.max_iterations - self.iteration
+    }
 
-        let mut valve_name = &Name(*b"AA");
-        let mut result = 0;
-        loop {
-            if self.iteration == self.max_iterations {
-                break;
+    pub fn calculate_best_moves(&mut self) -> (Self, Vec<Move>) {
+        let mut best_moves = Vec::new();
+        let mut best_state = self.clone();
+        let mut best_pressure = 0;
+
+        let moves = self.calculate_moves();
+        for m in moves.iter() {
+            let mut next = self.apply_move(m);
+            if next.iterations_left() == 0 {
+                continue;
             }
-            let mut current_best_value = 0;
-            let mut current_best_distance = 0;
-            let mut current_best_index = 0;
-            let current_row = &distance_matrix[valve_map[&valve_name]];
-
-            for (i, distance) in current_row.iter().enumerate() {
-                if self.open_valves.contains(&i) {
-                    continue;
-                }
-                if *distance >= self.max_iterations - self.iteration {
-                    continue;
-                }
-                let n = index_map[&i];
-                let valve = &self.cave.valves[n];
-                let expected_outcome =
-                    (self.max_iterations - self.iteration - distance - 1) as i32 * valve.flow_rate;
-                if expected_outcome > current_best_value {
-                    current_best_value = expected_outcome;
-                    current_best_distance = *distance;
-                    valve_name = n;
-                    current_best_index = i;
-                }
+            let (next, mut next_moves) = next.calculate_best_moves();
+            next_moves.push(*m);
+            if next.total_pressure > best_pressure {
+                best_pressure = next.total_pressure;
+                best_moves = next_moves;
+                best_state = next;
             }
-
-            result += current_best_value;
-            self.open_valves.insert(current_best_index);
-            self.iteration += current_best_distance + 1;
         }
-        result
+
+        (best_state, best_moves)
+    }
+
+    fn apply_move(&self, m: &Move) -> Self {
+        let mut next = self.clone();
+        next.position = m.target;
+        next.iteration += m.cost;
+        next.total_pressure += m.reward;
+        next.open_valves.insert(m.target);
+        next
+    }
+
+    fn calculate_moves(&self) -> Vec<Move> {
+        self.distance_matrix[*self.valve_index_map.get_by_left(&self.position).unwrap()]
+            .iter()
+            .enumerate()
+            .filter_map(|(i, distance)| {
+                if *distance == 0 {
+                    return None;
+                }
+                if *distance == u32::MAX {
+                    return None;
+                }
+                let cost = *distance + 1;
+                if cost > self.iterations_left() {
+                    return None;
+                }
+                let target = *self.valve_index_map.get_by_right(&i).unwrap();
+                if self.open_valves.contains(&target) {
+                    return None;
+                }
+                let valve = &self.cave.valves[&target];
+                let reward = valve.flow_rate * (self.iterations_left() as i32 - cost as i32);
+                if reward == 0 {
+                    return None;
+                }
+                Some(Move {
+                    target,
+                    reward,
+                    cost,
+                })
+            })
+            .collect()
     }
 }
 
@@ -303,13 +333,11 @@ mod tests {
         let mut valve_ff = Valve {
             name: Name(*b"FF"),
             flow_rate: 0,
-            open: false,
             connections: HashMap::from([(Name(*b"EE"), 1), (Name(*b"GG"), 1)]),
         };
         let mut valve_gg = Valve {
             name: Name(*b"GG"),
             flow_rate: 0,
-            open: false,
             connections: HashMap::from([(Name(*b"HH"), 1), (Name(*b"FF"), 1)]),
         };
         valve_ff.combine_connections(&valve_gg);
@@ -380,7 +408,7 @@ mod tests {
         let vim = cave.generate_valve_index_map();
         assert_eq!(
             vim,
-            HashMap::from([
+            BiMap::from_iter([
                 (Name(*b"AA"), 0),
                 (Name(*b"BB"), 1),
                 (Name(*b"CC"), 2),
@@ -394,19 +422,56 @@ mod tests {
     }
 
     #[test]
-    fn test_run() -> Result<(), String> {
+    fn test_calculate_best_moves() -> Result<(), String> {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
-        let cave = Cave::from_string(s);
+        let mut cave = Cave::from_string(s);
+        cave.minimise();
         let mut state = State {
             cave: &cave,
+            distance_matrix: &cave.calculate_distance_matrix(),
+            valve_index_map: &cave.generate_valve_index_map(),
             position: Name(*b"AA"),
             iteration: 0,
             max_iterations: 30,
             total_pressure: 0,
             open_valves: HashSet::new(),
         };
-        let result = state.run();
-        assert_eq!(result, 1651);
+        let (state, _) = state.calculate_best_moves();
+        assert_eq!(state.total_pressure, 1651);
+        Ok(())
+    }
+
+    #[test]
+    fn test_calculate_moves() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let mut cave = Cave::from_string(s);
+        cave.minimise();
+        let state = State {
+            cave: &cave,
+            distance_matrix: &cave.calculate_distance_matrix(),
+            valve_index_map: &cave.generate_valve_index_map(),
+            position: Name(*b"AA"),
+            iteration: 0,
+            max_iterations: 3,
+            total_pressure: 0,
+            open_valves: HashSet::new(),
+        };
+        let result = state.calculate_moves();
+        assert_eq!(
+            result,
+            vec![
+                Move {
+                    target: Name(*b"BB"),
+                    cost: 2,
+                    reward: 13
+                },
+                Move {
+                    target: Name(*b"DD"),
+                    cost: 2,
+                    reward: 20
+                }
+            ]
+        );
         Ok(())
     }
 }
