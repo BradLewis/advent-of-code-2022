@@ -1,9 +1,9 @@
-use day16::cave::CaveSolver;
+use day16::cave::Cave;
 use std::fs;
 
 fn main() {
     let s = fs::read_to_string("test_input.txt").expect("File not found");
-    let mut cave_solver = CaveSolver::from_string(s);
-    cave_solver.minimise();
-    cave_solver.print();
+    let mut cave = Cave::from_string(s);
+    
+    cave.print();
 }
