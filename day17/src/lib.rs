@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const WIDTH: usize = 7;
 
@@ -59,6 +59,7 @@ struct Chamber {
     jet: Vec<u8>,
     height: usize,
     iteration: usize,
+    height_offset: usize,
 }
 
 impl Chamber {
@@ -68,11 +69,12 @@ impl Chamber {
             jet: s.as_bytes().to_vec(),
             height: 0,
             iteration: 0,
+            height_offset: 0,
         }
     }
 
     pub fn drop_piece(&mut self, piece: &mut Piece) {
-        let rows_to_add = 4 - (self.cave.len() - self.height);
+        let rows_to_add = 4 - (self.cave.len() - (self.height - self.height_offset));
         for _ in 0..rows_to_add {
             self.cave.push([b'.'; 7]);
         }
@@ -156,7 +158,7 @@ impl Chamber {
             let y = ((self.cave.len() - 1) as isize - (piece.position.1 - part.1)) as usize;
             self.cave[y][x] = b'#';
 
-            self.height = self.height.max(y + 1);
+            self.height = self.height.max(y + 1 + self.height_offset);
         }
     }
 
@@ -170,18 +172,89 @@ impl Chamber {
         }
         println!("_________");
     }
+
+    fn get_cave_mask(&self, num_rows: usize) -> u128 {
+        let mut mask = 0;
+        if self.height == 0 {
+            return u128::MAX;
+        }
+        for i in 0..num_rows {
+            let row_number = (self.height - 1) as isize - i as isize;
+            if ((self.height - 1) as isize - i as isize) < 0 {
+                mask |= 0b1111111 << (i * WIDTH);
+                continue;
+            }
+            for j in 0..WIDTH {
+                if self.cave[row_number as usize][j] == b'#' {
+                    mask |= 0b1 << (i * WIDTH + j)
+                }
+            }
+        }
+        mask
+    }
 }
 
-pub fn check_height_after(chamber_str: &str, pieces_str: &str, drop_count: usize) -> usize {
+pub fn check_height_after(
+    chamber_str: &str,
+    pieces_str: &str,
+    drop_count: usize,
+    rows_to_check: usize,
+) -> usize {
     let piece_factory = PieceFactory::from_str(pieces_str);
     let mut chamber = Chamber::new(chamber_str);
+    let mut cache: HashMap<(usize, usize, u128), (usize, usize)> = HashMap::new();
 
-    for i in 0..drop_count {
-        let mut piece = piece_factory.create(i % 5);
+    let mut drop_number = 0;
+    let mut found_cycle = false;
+    while drop_number < drop_count {
+        if !found_cycle {
+            let bitmask = chamber.get_cave_mask(rows_to_check);
+            if cache.contains_key(&(
+                drop_number % 5,
+                chamber.iteration % chamber.jet.len(),
+                bitmask,
+            )) {
+                found_cycle = true;
+                println!(
+                    "Found combination in cache: {} - {}:{}",
+                    chamber.iteration,
+                    drop_number % 5,
+                    chamber.iteration % chamber.jet.len()
+                );
+                let (starting_height, starting_drop) = cache
+                    .get(&(
+                        drop_number % 5,
+                        chamber.iteration % chamber.jet.len(),
+                        bitmask,
+                    ))
+                    .unwrap();
+                let ending_height = chamber.height;
+                let ending_drop = drop_number + 1;
+                let delta_height = ending_height - starting_height;
+                let delta_drop = ending_drop - starting_drop;
+                let remaining_drops = drop_count - drop_number;
+                let loops = remaining_drops / delta_drop;
+                let offset = remaining_drops % delta_drop;
+                chamber.height = ending_height + delta_height * loops;
+                drop_number = drop_count - offset;
+                chamber.height_offset = delta_height * loops;
+            }
+            cache.insert(
+                (
+                    drop_number % 5,
+                    chamber.iteration % chamber.jet.len(),
+                    bitmask,
+                ),
+                (chamber.height, drop_number + 1),
+            );
+        }
+        let mut piece = piece_factory.create(drop_number % 5);
         chamber.drop_piece(&mut piece);
+        drop_number += 1;
     }
     chamber.height
 }
+
 #[cfg(test)]
 mod tests {
 
@@ -331,7 +404,7 @@ mod tests {
         let pieces_str = fs::read_to_string("pieces.txt").expect("File not found");
         let chamber_str = fs::read_to_string("test_input.txt").expect("File not found");
 
-        let result = check_height_after(&chamber_str, &pieces_str, 2022);
+        let result = check_height_after(&chamber_str, &pieces_str, 2022, 18);
         assert_eq!(result, 3068);
         Ok(())
     }
@@ -341,8 +414,26 @@ mod tests {
         let pieces_str = fs::read_to_string("pieces.txt").expect("File not found");
         let chamber_str = fs::read_to_string("test_input.txt").expect("File not found");
 
-        let result = check_height_after(&chamber_str, &pieces_str, 1000000000000);
-        assert_eq!(result, 3068);
+        let result = check_height_after(&chamber_str, &pieces_str, 1_000_000_000_000, 18);
+        assert_eq!(result, 1514285714288);
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_bit_mask() -> Result<(), String> {
+        let pieces_str = fs::read_to_string("pieces.txt").expect("File not found");
+        let chamber_str = fs::read_to_string("test_input.txt").expect("File not found");
+
+        let piece_factory = PieceFactory::from_str(&pieces_str);
+        let mut chamber = Chamber::new(&chamber_str);
+
+        for i in 0..3 {
+            let mut piece = piece_factory.create(i);
+            chamber.drop_piece(&mut piece);
+        }
+        let bitmask = chamber.get_cave_mask(2);
+
+        assert_eq!(bitmask, 0b0000100_0000100);
         Ok(())
     }
 }
