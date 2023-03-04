@@ -116,19 +116,6 @@ impl Graph {
             }
             total += 6 - num_neighbours;
         }
-
-        for (key, value) in cache.iter() {
-            let neighbours = key.neighbours();
-
-            for neighbour in neighbours.iter() {
-                if cache.contains_key(neighbour) && cache[neighbour] != *value {
-                    println!(
-                        "Error! {:?}:{:?} -- {:?}:{:?}",
-                        key, value, neighbour, cache[neighbour]
-                    );
-                }
-            }
-        }
         total
     }
 
@@ -163,30 +150,31 @@ impl Graph {
                 _ => (),
             }
         }
-        if position == Position::new(14, 3, 13) {
-            cache.insert(position, SearchResult::Free);
-            return false;
-        }
         cache.insert(position, SearchResult::Searching);
+        let mut skip_count = 0;
         for neighbour in position.neighbours().iter() {
             if self.positions.contains(neighbour) {
+                skip_count += 1;
                 continue;
             }
             if cache.contains_key(neighbour) && cache[neighbour] == SearchResult::Searching {
+                skip_count += 1;
                 continue;
             }
             if self.check_out_of_bounds(neighbour) {
-                // println!("Fre!");
                 cache.insert(position, SearchResult::Free);
                 return false;
             }
             if !self.check_trapped(*neighbour, cache) {
-                // println!("Free!");
                 cache.insert(position, SearchResult::Free);
                 return false;
             }
         }
-        cache.insert(position, SearchResult::Trapped);
+        if skip_count != 6 {
+            cache.insert(position, SearchResult::Trapped);
+        } else {
+            cache.remove(&position);
+        }
         true
     }
 }
