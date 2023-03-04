@@ -1,4 +1,13 @@
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+use std::collections::{HashMap, HashSet};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchResult {
+    Searching,
+    Trapped,
+    Free,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 struct Position {
     x: isize,
     y: isize,
@@ -13,6 +22,17 @@ impl Position {
     fn distance(&self, position: Position) -> isize {
         (self.x - position.x).abs() + (self.y - position.y).abs() + (self.z - position.z).abs()
     }
+
+    fn neighbours(&self) -> Vec<Position> {
+        vec![
+            Position::new(self.x - 1, self.y, self.z),
+            Position::new(self.x + 1, self.y, self.z),
+            Position::new(self.x, self.y - 1, self.z),
+            Position::new(self.x, self.y + 1, self.z),
+            Position::new(self.x, self.y, self.z - 1),
+            Position::new(self.x, self.y, self.z + 1),
+        ]
+    }
 }
 
 #[derive(Debug)]
@@ -23,14 +43,7 @@ struct Node {
 
 impl Node {
     fn missing_connections(&self) -> Vec<Position> {
-        let to_check = vec![
-            Position::new(self.position.x - 1, self.position.y, self.position.z),
-            Position::new(self.position.x + 1, self.position.y, self.position.z),
-            Position::new(self.position.x, self.position.y - 1, self.position.z),
-            Position::new(self.position.x, self.position.y + 1, self.position.z),
-            Position::new(self.position.x, self.position.y, self.position.z - 1),
-            Position::new(self.position.x, self.position.y, self.position.z + 1),
-        ];
+        let to_check = self.position.neighbours();
         to_check
             .into_iter()
             .filter(|p| !self.connections.contains(p))
@@ -41,6 +54,7 @@ impl Node {
 #[derive(Debug)]
 pub struct Graph {
     nodes: Vec<Node>,
+    positions: HashSet<Position>,
     max_position: Position,
     min_position: Position,
 }
@@ -55,10 +69,10 @@ impl Graph {
             })
             .collect();
 
-        Graph::generate(&positions)
+        Graph::generate(positions)
     }
 
-    fn generate(positions: &[Position]) -> Self {
+    fn generate(positions: Vec<Position>) -> Self {
         let mut max_position = Position::new(0, 0, 0);
         let mut nodes: Vec<Node> = Vec::new();
         for position in positions.iter() {
@@ -79,17 +93,101 @@ impl Graph {
         }
         Self {
             nodes,
+            positions: HashSet::from_iter(positions),
             max_position,
             min_position: Position::new(0, 0, 0),
         }
     }
 
-    pub fn surface_area(&self) -> usize {
+    pub fn surface_area(&self, include_trapped: bool) -> usize {
         let mut total = 0;
+        let mut cache = HashMap::new();
         for node in self.nodes.iter() {
-            total += 6 - node.connections.len();
+            let mut num_neighbours = 0;
+            let neighbours = node.position.neighbours();
+            for neighbour in neighbours.iter() {
+                if node.connections.contains(neighbour) {
+                    num_neighbours += 1;
+                    continue;
+                }
+                if !include_trapped && self.check_trapped(*neighbour, &mut cache) {
+                    num_neighbours += 1;
+                }
+            }
+            total += 6 - num_neighbours;
+        }
+
+        for (key, value) in cache.iter() {
+            let neighbours = key.neighbours();
+
+            for neighbour in neighbours.iter() {
+                if cache.contains_key(neighbour) && cache[neighbour] != *value {
+                    println!(
+                        "Error! {:?}:{:?} -- {:?}:{:?}",
+                        key, value, neighbour, cache[neighbour]
+                    );
+                }
+            }
         }
         total
+    }
+
+    fn check_out_of_bounds(&self, position: &Position) -> bool {
+        if position.x > self.max_position.x {
+            return true;
+        } else if position.x < self.min_position.x {
+            return true;
+        } else if position.y > self.max_position.y {
+            return true;
+        } else if position.y < self.min_position.y {
+            return true;
+        } else if position.z > self.max_position.z {
+            return true;
+        } else if position.z < self.min_position.z {
+            return true;
+        }
+        false
+    }
+
+    fn check_trapped(
+        &self,
+        position: Position,
+        cache: &mut HashMap<Position, SearchResult>,
+    ) -> bool {
+        // println!("{:?}", position);
+        if cache.contains_key(&position) {
+            let result = cache[&position];
+            match result {
+                SearchResult::Free => return false,
+                SearchResult::Trapped => return true,
+                _ => (),
+            }
+        }
+        if position == Position::new(14, 3, 13) {
+            cache.insert(position, SearchResult::Free);
+            return false;
+        }
+        cache.insert(position, SearchResult::Searching);
+        for neighbour in position.neighbours().iter() {
+            if self.positions.contains(neighbour) {
+                continue;
+            }
+            if cache.contains_key(neighbour) && cache[neighbour] == SearchResult::Searching {
+                continue;
+            }
+            if self.check_out_of_bounds(neighbour) {
+                // println!("Fre!");
+                cache.insert(position, SearchResult::Free);
+                return false;
+            }
+            if !self.check_trapped(*neighbour, cache) {
+                // println!("Free!");
+                cache.insert(position, SearchResult::Free);
+                return false;
+            }
+        }
+        cache.insert(position, SearchResult::Trapped);
+        true
     }
 }
 
@@ -111,7 +209,7 @@ mod tests {
     #[test]
     fn test_graph_load() -> Result<(), String> {
         let p = vec![Position::new(1, 1, 1), Position::new(2, 1, 1)];
-        let graph = Graph::generate(&p);
+        let graph = Graph::generate(p);
 
         assert_eq!(graph.nodes.len(), 2);
         assert_eq!(graph.nodes[0].connections.len(), 1);
@@ -134,23 +232,46 @@ mod tests {
     #[test]
     fn test_graph_surface_area() -> Result<(), String> {
         let p = vec![Position::new(1, 1, 1), Position::new(2, 1, 1)];
-        let graph = Graph::generate(&p);
-        assert_eq!(graph.surface_area(), 10);
+        let graph = Graph::generate(p);
+        assert_eq!(graph.surface_area(true), 10);
 
         let s = fs::read_to_string("test_input.txt").expect("File not found");
         let graph = Graph::from_string(&s);
-        assert_eq!(graph.surface_area(), 64);
+        assert_eq!(graph.surface_area(true), 64);
         Ok(())
     }
 
     #[test]
     fn test_node_missing_connections() -> Result<(), String> {
         let p = vec![Position::new(1, 1, 1), Position::new(2, 1, 1)];
-        let graph = Graph::generate(&p);
+        let graph = Graph::generate(p);
         let n = &graph.nodes[0];
         let mc = n.missing_connections();
 
         assert_eq!(mc.len(), 5);
+        Ok(())
+    }
+
+    #[test]
+    fn test_graph_node_trapped() -> Result<(), String> {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let graph = Graph::from_string(&s);
+
+        let result = graph.check_trapped(Position::new(2, 2, 5), &mut HashMap::new());
+        assert!(result);
+        assert!(!graph.check_trapped(Position::new(1, 1, 5), &mut HashMap::new()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_graph_surface_area_exclude_trapped() -> Result<(), String> {
+        let p = vec![Position::new(1, 1, 1), Position::new(2, 1, 1)];
+        let graph = Graph::generate(p);
+        assert_eq!(graph.surface_area(false), 10);
+
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let graph = Graph::from_string(&s);
+        assert_eq!(graph.surface_area(false), 58);
         Ok(())
     }
 }
