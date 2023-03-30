@@ -13,6 +13,7 @@ impl Blueprint {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::Blueprint;
 

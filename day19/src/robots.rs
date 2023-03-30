@@ -61,9 +61,16 @@ fn parse(s: &str, re: &str) -> Vec<String> {
         .collect()
 }
 
+#[cfg(test)]
 mod tests {
 
     use crate::robots::parse;
+
+    macro_rules! str {
+        ($a:expr) => {
+            String::from($a)
+        };
+    }
 
     #[test]
     fn test_regex() {
@@ -73,6 +80,16 @@ mod tests {
         );
 
         assert_eq!(result.len(), 5);
+        assert_eq!(
+            result,
+            vec![
+                str!("obsidian"),
+                str!("3"),
+                str!("ore"),
+                str!("8"),
+                str!("clay")
+            ]
+        );
     }
 
     mod robots {
