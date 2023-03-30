@@ -1,14 +1,22 @@
-use crate::robots::Robot;
+use std::collections::HashMap;
+
+use crate::robots::{ResourceType, Robot};
 
 #[derive(Debug)]
 pub struct Blueprint {
-    pub robots: Vec<Robot>,
+    pub robots: HashMap<ResourceType, Robot>,
 }
 
 impl Blueprint {
     pub fn create(s: &str) -> Self {
         let (_, stripped) = s.split_once(':').unwrap();
-        let robots: Vec<_> = stripped.split(". ").map(Robot::new).collect();
+        let robots: HashMap<_, _> = stripped
+            .split(". ")
+            .map(|s| {
+                let r = Robot::new(s);
+                (r.resource_collected, r)
+            })
+            .collect();
         Self { robots }
     }
 }

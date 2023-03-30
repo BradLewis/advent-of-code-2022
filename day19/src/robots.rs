@@ -1,7 +1,7 @@
 use regex::Regex;
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ResourceType {
     Ore,
     Clay,
@@ -23,13 +23,13 @@ impl FromStr for ResourceType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Price {
     pub resource_type: ResourceType,
     pub amount: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Robot {
     pub cost: Vec<Price>,
     pub resource_collected: ResourceType,
@@ -50,6 +50,15 @@ impl Robot {
             cost,
             resource_collected,
         }
+    }
+
+    pub fn can_afford(&self, resources: &HashMap<ResourceType, usize>) -> bool {
+        for price in self.cost.iter() {
+            if resources.get(&price.resource_type).unwrap_or(&0) < &price.amount {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -93,6 +102,8 @@ mod tests {
     }
 
     mod robots {
+        use std::collections::HashMap;
+
         use crate::robots::{ResourceType, Robot};
 
         #[test]
@@ -117,6 +128,20 @@ mod tests {
             assert_eq!(robot.cost[0].resource_type, ResourceType::Ore);
             assert_eq!(robot.cost[1].amount, 8);
             assert_eq!(robot.cost[1].resource_type, ResourceType::Clay);
+        }
+
+        #[test]
+        fn test_can_afford() {
+            let s = String::from("Each obsidian robot costs 3 ore and 8 clay.");
+            let robot = Robot::new(&s);
+
+            assert!(!robot.can_afford(&HashMap::new()));
+            assert!(robot.can_afford(&HashMap::from([
+                (ResourceType::Ore, 3),
+                (ResourceType::Clay, 8),
+                (ResourceType::Obsidian, 0),
+                (ResourceType::Geode, 0),
+            ])))
         }
     }
 }
