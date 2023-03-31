@@ -1,7 +1,4 @@
-use crate::{
-    blueprint::Blueprint,
-    robots::{ResourceType, Robot},
-};
+use crate::{blueprint::Blueprint, robots::ResourceType};
 use std::collections::HashMap;
 
 macro_rules! init_resource_count {
@@ -32,6 +29,12 @@ impl State {
             iteration: 0,
         }
     }
+
+    fn gather_resources(&mut self) {
+        for (&k, &v) in self.robots.iter() {
+            self.resources.insert(k, self.resources[&k] + v);
+        }
+    }
 }
 
 impl Default for State {
@@ -43,21 +46,41 @@ impl Default for State {
 #[derive(Debug)]
 pub struct Processor {
     pub blueprint: Blueprint,
+    pub max_iterations: usize,
 }
 
 impl Processor {
     pub fn new(blueprint: Blueprint) -> Self {
-        Self { blueprint }
+        Self {
+            blueprint,
+            max_iterations: 24,
+        }
     }
 
-    pub fn process_turn(&mut self, state: &mut State) -> usize {
+    pub fn process_turn(&mut self, state: &mut State) -> State {
         state.iteration += 1;
+        println!("{}", state.iteration);
         let purchasable = self.get_purchasable(state);
-        let results: Vec<usize> = Vec::new();
-        for p in purchasable {
-            let mut s = state.clone();
+        state.gather_resources();
+        if state.iteration == 24 {
+            return state.clone();
         }
-        *results.iter().max().unwrap()
+        let mut results: Vec<State> = Vec::new();
+        for &p in purchasable.iter() {
+            let mut s = state.clone();
+            self.purchase_robot(p, &mut s);
+            results.push(self.process_turn(&mut s));
+        }
+        if purchasable.len() < 4 {
+            let mut s = state.clone();
+            results.push(self.process_turn(&mut s));
+        }
+        results
+            .into_iter()
+            .max_by(|x, y| {
+                x.resources[&ResourceType::Geode].cmp(&y.resources[&ResourceType::Geode])
+            })
+            .unwrap()
     }
 
     fn get_purchasable(&self, state: &State) -> Vec<ResourceType> {
@@ -85,6 +108,18 @@ impl Processor {
 
 #[cfg(test)]
 mod tests {
+
+    mod state {
+        use crate::{processor::State, robots::ResourceType};
+
+        #[test]
+        fn test_gather_resources() {
+            let mut s = State::new();
+            assert_eq!(s.resources[&ResourceType::Ore], 0);
+            s.gather_resources();
+            assert_eq!(s.resources[&ResourceType::Ore], 1);
+        }
+    }
 
     mod processor {
         use crate::{
@@ -131,6 +166,16 @@ mod tests {
             p.purchase_robot(ResourceType::Ore, &mut state);
             assert_eq!(state.robots[&ResourceType::Ore], 2);
             assert_eq!(state.resources[&ResourceType::Ore], 0);
+        }
+
+        #[test]
+        fn test_geode_count() {
+            let b = blueprint!();
+            let mut p = Processor::new(b);
+            let mut state = State::default();
+
+            let result = p.process_turn(&mut state);
+            assert_eq!(result.resources[&ResourceType::Geode], 9);
         }
     }
 }
