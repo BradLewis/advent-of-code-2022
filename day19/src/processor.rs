@@ -1,5 +1,5 @@
 use crate::{blueprint::Blueprint, robots::ResourceType};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 macro_rules! init_resource_count {
     () => {
@@ -18,17 +18,25 @@ pub struct State {
     pub resources: HashMap<ResourceType, usize>,
     iteration: usize,
     skips: Vec<ResourceType>,
+    wanted_robots: HashSet<ResourceType>,
 }
 
 impl State {
     pub fn new() -> Self {
         let mut robots = init_resource_count!();
         robots.insert(ResourceType::Ore, 1);
+        let wanted_robots = HashSet::from([
+            ResourceType::Ore,
+            ResourceType::Clay,
+            ResourceType::Obsidian,
+            ResourceType::Geode,
+        ]);
         Self {
             robots,
             resources: init_resource_count!(),
             iteration: 0,
             skips: Vec::new(),
+            wanted_robots,
         }
     }
 
@@ -76,7 +84,7 @@ impl Processor {
             self.purchase_robot(p, &mut s);
             results.push(self.process_turn(&mut s));
         }
-        if purchasable.len() < 4 {
+        if purchasable.len() < self.blueprint.robots.len() {
             let mut s = state.clone();
             s.skips = purchasable;
             results.push(self.process_turn(&mut s));
@@ -93,6 +101,7 @@ impl Processor {
         self.blueprint
             .robots
             .iter()
+            .filter(|(rt, _)| state.wanted_robots.contains(rt))
             .filter(|(_, r)| r.can_afford(&state.resources))
             .map(|(_, r)| r.resource_collected)
             .collect()
@@ -106,9 +115,18 @@ impl Processor {
                 state.resources[&p.resource_type] - p.amount,
             );
         }
-        state
-            .robots
-            .insert(resource_type, state.robots[&resource_type] + 1);
+        let count_robots_of_type = state.robots[&resource_type] + 1;
+        state.robots.insert(resource_type, count_robots_of_type);
+
+        if &count_robots_of_type
+            == self
+                .blueprint
+                .max_costs
+                .get(&resource_type)
+                .unwrap_or(&usize::MAX)
+        {
+            state.wanted_robots.remove(&resource_type);
+        }
     }
 }
 
