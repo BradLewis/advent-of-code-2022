@@ -14,9 +14,9 @@ pub fn part1(s: &str) -> usize {
             let mut state = State::new();
             let mut p = Processor::new(b);
 
-            println!("Start processing for blueprint {}", i);
+            println!("Start processing for blueprint {}", i + 1);
             let result = p.process_turn(&mut state);
-            i * result.resources[&ResourceType::Geode]
+            (i + 1) * result.resources[&ResourceType::Geode]
         })
         .sum()
 }
