@@ -14,9 +14,10 @@ macro_rules! init_resource_count {
 
 #[derive(Debug, Clone)]
 pub struct State {
-    pub robots: HashMap<ResourceType, usize>,
+    robots: HashMap<ResourceType, usize>,
     pub resources: HashMap<ResourceType, usize>,
-    pub iteration: usize,
+    iteration: usize,
+    skips: Vec<ResourceType>,
 }
 
 impl State {
@@ -27,6 +28,7 @@ impl State {
             robots,
             resources: init_resource_count!(),
             iteration: 0,
+            skips: Vec::new(),
         }
     }
 
@@ -59,20 +61,24 @@ impl Processor {
 
     pub fn process_turn(&mut self, state: &mut State) -> State {
         state.iteration += 1;
-        println!("{}", state.iteration);
         let purchasable = self.get_purchasable(state);
         state.gather_resources();
-        if state.iteration == 24 {
+        if state.iteration == self.max_iterations {
             return state.clone();
         }
         let mut results: Vec<State> = Vec::new();
         for &p in purchasable.iter() {
+            if state.skips.contains(&p) {
+                continue;
+            }
             let mut s = state.clone();
+            s.skips.clear();
             self.purchase_robot(p, &mut s);
             results.push(self.process_turn(&mut s));
         }
         if purchasable.len() < 4 {
             let mut s = state.clone();
+            s.skips = purchasable;
             results.push(self.process_turn(&mut s));
         }
         results
