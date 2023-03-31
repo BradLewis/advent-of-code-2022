@@ -60,10 +60,10 @@ pub struct Processor {
 }
 
 impl Processor {
-    pub fn new(blueprint: Blueprint) -> Self {
+    pub fn new(blueprint: Blueprint, max_iterations: usize) -> Self {
         Self {
             blueprint,
-            max_iterations: 24,
+            max_iterations,
         }
     }
 
@@ -164,7 +164,7 @@ mod tests {
         #[test]
         fn test_get_purchasable() {
             let b = blueprint!();
-            let p = Processor::new(b);
+            let p = Processor::new(b, 24);
 
             let mut state = State::default();
 
@@ -177,7 +177,7 @@ mod tests {
         #[test]
         fn test_purchase_robot() {
             let b = blueprint!();
-            let mut p = Processor::new(b);
+            let mut p = Processor::new(b, 24);
 
             let mut state = State::default();
 
@@ -195,7 +195,7 @@ mod tests {
         #[test]
         fn test_geode_count() {
             let b = blueprint!();
-            let mut p = Processor::new(b);
+            let mut p = Processor::new(b, 24);
             let mut state = State::default();
 
             let result = p.process_turn(&mut state);
