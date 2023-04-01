@@ -1,48 +1,30 @@
 use crate::{blueprint::Blueprint, robots::ResourceType};
-use std::collections::{HashMap, HashSet};
+use std::{cmp::Ordering, collections::BinaryHeap};
 
-macro_rules! init_resource_count {
-    () => {
-        HashMap::from([
-            (ResourceType::Ore, 0),
-            (ResourceType::Clay, 0),
-            (ResourceType::Obsidian, 0),
-            (ResourceType::Geode, 0),
-        ])
-    };
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
-    robots: HashMap<ResourceType, usize>,
-    pub resources: HashMap<ResourceType, usize>,
+    robots: Vec<usize>,
+    pub resources: Vec<usize>,
     iteration: usize,
     skips: Vec<ResourceType>,
-    wanted_robots: HashSet<ResourceType>,
+    wanted_robots: Vec<bool>,
 }
-
 impl State {
     pub fn new() -> Self {
-        let mut robots = init_resource_count!();
-        robots.insert(ResourceType::Ore, 1);
-        let wanted_robots = HashSet::from([
-            ResourceType::Ore,
-            ResourceType::Clay,
-            ResourceType::Obsidian,
-            ResourceType::Geode,
-        ]);
+        let mut robots = vec![0; ResourceType::COUNT];
+        robots[ResourceType::Ore as usize] = 1;
+        let wanted_robots = vec![true; ResourceType::COUNT];
         Self {
             robots,
-            resources: init_resource_count!(),
+            resources: vec![0; ResourceType::COUNT],
             iteration: 0,
             skips: Vec::new(),
             wanted_robots,
         }
     }
-
     fn gather_resources(&mut self) {
-        for (&k, &v) in self.robots.iter() {
-            self.resources.insert(k, self.resources[&k] + v);
+        for (k, v) in self.robots.iter().enumerate() {
+            self.resources[k] += v;
         }
     }
 }
@@ -50,6 +32,18 @@ impl State {
 impl Default for State {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Ord for State {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.resources[ResourceType::Geode as usize]
+            .cmp(&other.resources[ResourceType::Geode as usize])
+    }
+}
+impl PartialOrd for State {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -74,7 +68,7 @@ impl Processor {
         if state.iteration == self.max_iterations {
             return state.clone();
         }
-        let mut results: Vec<State> = Vec::new();
+        let mut results = BinaryHeap::new();
         for &p in purchasable.iter() {
             if state.skips.contains(&p) {
                 continue;
@@ -89,35 +83,25 @@ impl Processor {
             s.skips = purchasable;
             results.push(self.process_turn(&mut s));
         }
-        results
-            .into_iter()
-            .max_by(|x, y| {
-                x.resources[&ResourceType::Geode].cmp(&y.resources[&ResourceType::Geode])
-            })
-            .unwrap()
+        results.pop().unwrap()
     }
 
     fn get_purchasable(&self, state: &State) -> Vec<ResourceType> {
         self.blueprint
             .robots
             .iter()
-            .filter(|(rt, _)| state.wanted_robots.contains(rt))
+            .filter(|(rt, _)| state.wanted_robots[**rt as usize])
             .filter(|(_, r)| r.can_afford(&state.resources))
             .map(|(_, r)| r.resource_collected)
             .collect()
     }
-
     pub fn purchase_robot(&mut self, resource_type: ResourceType, state: &mut State) {
         let cost = &self.blueprint.robots[&resource_type].cost;
         for p in cost {
-            state.resources.insert(
-                p.resource_type,
-                state.resources[&p.resource_type] - p.amount,
-            );
+            state.resources[p.resource_type as usize] -= p.amount;
         }
-        let count_robots_of_type = state.robots[&resource_type] + 1;
-        state.robots.insert(resource_type, count_robots_of_type);
-
+        let count_robots_of_type = state.robots[resource_type as usize] + 1;
+        state.robots[resource_type as usize] = count_robots_of_type;
         if &count_robots_of_type
             == self
                 .blueprint
@@ -125,7 +109,7 @@ impl Processor {
                 .get(&resource_type)
                 .unwrap_or(&usize::MAX)
         {
-            state.wanted_robots.remove(&resource_type);
+            state.wanted_robots[resource_type as usize] = false;
         }
     }
 }
@@ -139,9 +123,9 @@ mod tests {
         #[test]
         fn test_gather_resources() {
             let mut s = State::new();
-            assert_eq!(s.resources[&ResourceType::Ore], 0);
+            assert_eq!(s.resources[ResourceType::Ore as usize], 0);
             s.gather_resources();
-            assert_eq!(s.resources[&ResourceType::Ore], 1);
+            assert_eq!(s.resources[ResourceType::Ore as usize], 1);
         }
     }
 
@@ -168,7 +152,7 @@ mod tests {
 
             let mut state = State::default();
 
-            state.resources.insert(ResourceType::Ore, 4);
+            state.resources[ResourceType::Ore as usize] = 4;
 
             let result = p.get_purchasable(&state);
             assert_eq!(result.len(), 2);
@@ -181,15 +165,15 @@ mod tests {
 
             let mut state = State::default();
 
-            state.resources.insert(ResourceType::Ore, 6);
+            state.resources[ResourceType::Ore as usize] = 6;
 
             p.purchase_robot(ResourceType::Clay, &mut state);
-            assert_eq!(state.robots[&ResourceType::Clay], 1);
-            assert_eq!(state.resources[&ResourceType::Ore], 4);
+            assert_eq!(state.robots[ResourceType::Clay as usize], 1);
+            assert_eq!(state.resources[ResourceType::Ore as usize], 4);
 
             p.purchase_robot(ResourceType::Ore, &mut state);
-            assert_eq!(state.robots[&ResourceType::Ore], 2);
-            assert_eq!(state.resources[&ResourceType::Ore], 0);
+            assert_eq!(state.robots[ResourceType::Ore as usize], 2);
+            assert_eq!(state.resources[ResourceType::Ore as usize], 0);
         }
 
         #[test]
@@ -199,7 +183,7 @@ mod tests {
             let mut state = State::default();
 
             let result = p.process_turn(&mut state);
-            assert_eq!(result.resources[&ResourceType::Geode], 9);
+            assert_eq!(result.resources[ResourceType::Geode as usize], 9);
         }
     }
 }

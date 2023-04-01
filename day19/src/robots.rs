@@ -1,5 +1,5 @@
 use regex::Regex;
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ResourceType {
@@ -7,6 +7,10 @@ pub enum ResourceType {
     Clay,
     Obsidian,
     Geode,
+}
+
+impl ResourceType {
+    pub const COUNT: usize = 4;
 }
 
 impl FromStr for ResourceType {
@@ -52,9 +56,9 @@ impl Robot {
         }
     }
 
-    pub fn can_afford(&self, resources: &HashMap<ResourceType, usize>) -> bool {
+    pub fn can_afford(&self, resources: &[usize]) -> bool {
         for price in self.cost.iter() {
-            if resources.get(&price.resource_type).unwrap_or(&0) < &price.amount {
+            if resources[price.resource_type as usize] < price.amount {
                 return false;
             }
         }
@@ -102,7 +106,6 @@ mod tests {
     }
 
     mod robots {
-        use std::collections::HashMap;
 
         use crate::robots::{ResourceType, Robot};
 
@@ -135,13 +138,8 @@ mod tests {
             let s = String::from("Each obsidian robot costs 3 ore and 8 clay.");
             let robot = Robot::new(&s);
 
-            assert!(!robot.can_afford(&HashMap::new()));
-            assert!(robot.can_afford(&HashMap::from([
-                (ResourceType::Ore, 3),
-                (ResourceType::Clay, 8),
-                (ResourceType::Obsidian, 0),
-                (ResourceType::Geode, 0),
-            ])))
+            assert!(!robot.can_afford(&[0; 4]));
+            assert!(robot.can_afford(&[3, 8, 0, 0]));
         }
     }
 }
