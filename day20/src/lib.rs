@@ -8,12 +8,9 @@ fn index_of(vec: &[IndexValue], value: isize) -> usize {
     vec.iter().position(|&(_, v)| value == v).unwrap()
 }
 
-fn load_input(s: &str) -> Vec<IndexValue> {
+fn load_input(s: &str, key: isize) -> Vec<IndexValue> {
     s.lines()
-        .map(|l| {
-            l.parse::<isize>()
-                .expect(&format!("Unable to parse line {}", l))
-        })
+        .map(|l| l.parse::<isize>().unwrap() * key)
         .enumerate()
         .collect()
 }
@@ -22,17 +19,19 @@ fn get_result(pos: usize, vec: &[IndexValue], iterations: usize) -> isize {
     vec[(pos + iterations) % vec.len()].1
 }
 
-pub fn decode(s: &str) -> isize {
-    let mut v = load_input(s);
+pub fn decode(s: &str, key: isize, num_rounds: usize) -> isize {
+    let mut v = load_input(s, key);
     let len = v.len();
-    for i in 0..v.len() {
-        let index = get_initial_index(&v, i);
-        let value = v[index].1;
-        let new_position = index as isize + value;
-        let new_index = new_position.rem_euclid(len as isize - 1) as usize;
+    for _ in 0..num_rounds {
+        for i in 0..v.len() {
+            let index = get_initial_index(&v, i);
+            let value = v[index].1;
+            let new_position = index as isize + value;
+            let new_index = new_position.rem_euclid(len as isize - 1) as usize;
 
-        let moving = v.remove(index);
-        v.insert(new_index, moving);
+            let moving = v.remove(index);
+            v.insert(new_index, moving);
+        }
     }
 
     let zero_position = index_of(&v, 0);
@@ -51,7 +50,7 @@ mod tests {
     fn test_part1() {
         let s = fs::read_to_string("test_input.txt").expect("File not found");
 
-        let result = decode(&s);
+        let result = decode(&s, 1, 1);
         assert_eq!(result, 3);
     }
 
@@ -65,5 +64,13 @@ mod tests {
     fn test_get_initial_index() {
         let v: Vec<IndexValue> = vec![0, 1, 2, -3, 4].into_iter().enumerate().collect();
         assert_eq!(get_initial_index(&v, 1), 1);
+    }
+
+    #[test]
+    fn test_part2() {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+
+        let result = decode(&s, 811_589_153, 10);
+        assert_eq!(result, 1_623_178_306);
     }
 }
