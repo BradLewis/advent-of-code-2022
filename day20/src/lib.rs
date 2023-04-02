@@ -10,7 +10,10 @@ fn index_of(vec: &[IndexValue], value: isize) -> usize {
 
 fn load_input(s: &str) -> Vec<IndexValue> {
     s.lines()
-        .map(|l| l.parse::<isize>().unwrap())
+        .map(|l| {
+            l.parse::<isize>()
+                .expect(&format!("Unable to parse line {}", l))
+        })
         .enumerate()
         .collect()
 }
