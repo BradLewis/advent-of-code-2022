@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use monkey::{Monkey, Operation};
 
@@ -31,8 +31,18 @@ fn get_monkey_list(s: &str, monkey_map: &HashMap<&str, usize>) -> Vec<Monkey> {
         .collect()
 }
 
+pub fn part1(s: &str) -> isize {
+    let monkey_map = parse(s);
+
+    let monkies = get_monkey_list(s, &monkey_map);
+
+    let root_index = monkey_map[&"root"];
+    monkies[root_index].get_value(&monkies)
+}
+
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -60,5 +70,12 @@ mod tests {
                 Monkey::Value(35)
             ]
         );
+    }
+
+    #[test]
+    fn test_part1() {
+        let s = fs::read_to_string("test_input.txt").expect("File not found");
+        let result = part1(&s);
+        assert_eq!(result, 152);
     }
 }
