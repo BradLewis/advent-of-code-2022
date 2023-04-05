@@ -1,12 +1,12 @@
 #[derive(Debug, PartialEq, Eq)]
-pub enum Operator {
+pub enum Operation {
     Add,
     Subtract,
     Multiply,
     Divide,
 }
 
-impl Operator {
+impl Operation {
     fn evaluate(&self, v1: isize, v2: isize) -> isize {
         match self {
             Self::Add => v1 + v2,
@@ -15,12 +15,22 @@ impl Operator {
             Self::Divide => v1 / v2,
         }
     }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "+" => Self::Add,
+            "-" => Self::Subtract,
+            "*" => Self::Multiply,
+            "/" => Self::Divide,
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Monkey {
     Value(isize),
-    Expression(usize, usize, Operator),
+    Expression(usize, usize, Operation),
 }
 
 impl Monkey {
@@ -45,7 +55,7 @@ mod tests {
         let monkies = vec![
             Monkey::Value(2),
             Monkey::Value(5),
-            Monkey::Expression(0, 1, Operator::Add),
+            Monkey::Expression(0, 1, Operation::Add),
         ];
         let monkey = &monkies[2];
         let result = monkey.get_value(&monkies);
