@@ -1,21 +1,46 @@
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Position {
-    x: usize,
-    y: usize,
+    pub x: usize,
+    pub y: usize,
 }
 
 impl Position {
-    fn new(x: usize, y: usize) -> Self {
+    pub fn new(x: usize, y: usize) -> Self {
         Self { x, y }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
+    Up = 3,
+    Right = 0,
+    Down = 1,
+    Left = 2,
+}
+
+impl Direction {
+    pub fn turn(&self, rotation: Rotation) -> Self {
+        match rotation {
+            Rotation::Right => match self {
+                Direction::Up => Direction::Right,
+                Direction::Right => Direction::Down,
+                Direction::Down => Direction::Left,
+                Direction::Left => Direction::Up,
+            },
+            Rotation::Left => match self {
+                Direction::Up => Direction::Left,
+                Direction::Right => Direction::Up,
+                Direction::Down => Direction::Right,
+                Direction::Left => Direction::Down,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Rotation {
+    Right = -1,
+    Left = 1,
 }
 
 #[derive(Debug)]
